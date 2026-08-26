@@ -1,6 +1,6 @@
 import pdfplumber
 
-RUTA_DE_DOCUMENTO = "/home/dravvt/Documentos/ThinkPython.pdf"
+RUTA_DE_DOCUMENTO = "ThinkPython.pdf"
 PAGINA_INICIAL = 20
 
 

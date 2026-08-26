@@ -7,3 +7,10 @@ en_US-lessac-medium.onnx.json
 
 __pycache__/
 *.pyc
+prueba.html
+
+# el libro de pruebas no es mio y pesa
+*.pdf
+libro.html
+figuras/
+libros/
