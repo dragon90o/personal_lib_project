@@ -1,0 +1,106 @@
+CONTEXTO DEL PROYECTO — lector de libros
+========================================
+(Para Claude: lee esto entero antes de tocar nada.)
+
+
+CÓMO TRABAJAR CONMIGO
+---------------------
+- El código lo escribo YO. Tú guías: diagnóstico, qué función tocar, qué API
+  usar, qué trampa evitar. No me escribas la implementación salvo que te lo
+  pida explícitamente.
+- Estoy aprendiendo Python. No es mi primer idioma técnico: explica los
+  conceptos, no los des por sabidos.
+- RESPUESTAS CORTAS. Una o dos frases. Nada de tablas ni listas largas si no
+  las pido. Me satura y dejo de leer.
+- Un paso cada vez. Si me das cinco cosas a la vez, no hago ninguna.
+
+
+QUÉ ES ESTO
+-----------
+Mi lector personal de libros para la universidad. Lee un PDF, lo limpia y me
+lo lee en voz alta con Piper (TTS) mientras resalta el párrafo actual.
+
+REQUISITO DURO: no puede perder contenido. Si se come una fórmula, un
+diagrama o un bloque de código, pierdo información de estudio. Fidelidad por
+encima de elegancia.
+
+
+ENTORNO
+-------
+- venv en la carpeta padre del proyecto (pdfplumber, piper, onnxruntime).
+- Libro de pruebas: /home/dravvt/Documentos/ThinkPython.pdf (240 páginas).
+  NO está en el repo.
+- El modelo de voz (en_US-lessac-medium.onnx, 61 MB) tampoco está en el repo.
+  Para trabajar el HTML no hace falta.
+- Ficheros: lib_pro.py (el lector), tabla.py (descifrado del PDF).
+
+
+LO QUE YA FUNCIONA
+------------------
+- Extracción del texto con pdfplumber.
+- Descifrado del código (ver abajo). 93 entradas en la tabla; descifra el
+  libro entero sin dejar un solo glifo roto.
+- limpiar() clasifica cada línea como prosa o código y las junta en párrafos
+  sin mezclarlas.
+- limpiar() devuelve una lista de bloques: {"tipo": "parrafo"|"codigo",
+  "texto": "..."}.
+- El TTS y el resaltado en terminal funcionan bien.
+
+
+HALLAZGOS TÉCNICOS (medidos, no supuestos)
+------------------------------------------
+1. LA FUENTE DEL CÓDIGO ESTÁ ROTA. ThinkPython.pdf lo generó "LaTeX with
+   hyperref" + Ghostscript 9.25. La fuente monoespaciada es un Type3 SIN
+   NOMBRE, o sea sin encoding estándar. pdfminer, poppler y mupdf caen todos
+   al glyph-list de ZapfDingbats, así que ">>> print" se extrae como
+   "❃❃❃ ♣r✐♥t". No es culpa de pdfplumber: pdftotext y mutool fallan igual.
+
+   Es una sustitución monoalfabética consistente. La tabla se dedujo con
+   texto conocido (las 31 palabras clave de Python, los mensajes de error, la
+   línea de puntuación ascii del capítulo de cadenas) y NO depende del libro:
+   es siempre el mismo fallback de pdfminer.
+
+   tabla() revienta si una pareja descuadra en longitud, porque zip() corta
+   por la más corta y corrompería la tabla en silencio.
+
+2. LOS DIAGRAMAS SON VECTORIALES. En las 240 páginas hay UNA sola imagen
+   embebida (pág. 205), pero 253 curves y 217 rects. page.images no los ve:
+   hay que calcular el bbox de la región y rasterizarla con
+   page.crop(bbox).to_image(resolution=200).
+
+3. LAS FÓRMULAS SON TEXTO, en la fuente PazoMath-Italic, y se extraen bien.
+   No hay que rasterizarlas.
+
+4. Clasificar por el PRIMER carácter falla ("76trombones is illegal..." es
+   prosa que empieza en fuente de código). Se usa el porcentaje: una línea de
+   código de verdad es 100% fuente rota, la prosa con nombres de variable
+   dentro no pasa del 70%. Umbral: 0.9.
+
+5. En el bucle que junta líneas hacen falta DOS banderas, es_codigo y
+   anterior_codigo. Una impide pegar código a la prosa; la otra, prosa al
+   código. Con una sola se cuela por el otro lado.
+
+6. LaTeX dibuja un marco alrededor de los bloques de código y sus esquinas se
+   extraen como comillas sueltas: 435 líneas en el libro, ninguna con
+   contenido. Se descartan.
+
+
+EN QUÉ ESTÁBAMOS (siguiente paso)
+---------------------------------
+Pasar de la terminal a un HTML LOCAL con:
+  - opciones de lectura cómoda (tamaño de letra, tema, ancho de línea)
+  - resaltado del párrafo actual
+  - controles de audio: pausa, atrás, adelante
+  - las imágenes/diagramas visibles
+
+El paso inmediato: una función que reciba los bloques de limpiar() y devuelva
+el HTML. Bloque "parrafo" -> <p>, bloque "codigo" -> <pre>.
+TRAMPA: el libro tiene cosas como "<type bool>". Hay que escaparlas con
+html.escape() o el navegador se las come creyendo que son etiquetas.
+
+Decisión pendiente para más adelante: de dónde sale el audio en el HTML.
+O se pregeneran todos los .wav con Piper, o hace falta un servidor local que
+sintetice bajo demanda.
+
+DESPUÉS: las figuras (rasterizar las regiones vectoriales), y al final meter
+los libros ya procesados en SQL comprimidos para que no ocupen espacio.
