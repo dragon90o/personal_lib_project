@@ -16,7 +16,6 @@ import io
 import os
 import sys
 import wave
-import webbrowser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 from piper import PiperVoice
@@ -156,8 +155,14 @@ def main():
     url = preparar(pdf, nombre, inicio, rehacer)
     print("cargando %s ..." % MODELO)
     Lector.voz = PiperVoice.load(MODELO)
-    print("lector en %s   (ctrl-c para parar)" % url)
-    webbrowser.open(url)
+    # abrir el navegador solo no es fiable: xdg-open depende del .desktop del
+    # navegador por defecto, y hay entradas (Mullvad, por ejemplo) cuyo Exec
+    # viene envuelto en un sh -c que se rompe al re-trocearlo.  Imprimir la
+    # URL funciona en cualquier maquina.
+    print()
+    print("   %s" % url)
+    print()
+    print("(pega esa direccion en el navegador; ctrl-c para parar)")
     servidor = HTTPServer(("127.0.0.1", PUERTO), Lector)
     try:
         servidor.serve_forever()
