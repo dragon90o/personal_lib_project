@@ -29,13 +29,20 @@ venv/Scripts/activate        # on Linux: source venv/bin/activate
 pip install pdfplumber piper-tts
 ```
 
-And the voice model (61 MB, not in the repo):
+And one voice model per language (61 MB each, not in the repo):
 
 ```
-B=https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium
-curl -O $B/en_US-lessac-medium.onnx
-curl -O $B/en_US-lessac-medium.onnx.json
+V=https://huggingface.co/rhasspy/piper-voices/resolve/main
+curl -LO $V/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+curl -LO $V/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+curl -LO $V/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx
+curl -LO $V/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx.json
 ```
+
+Each book's language is detected when it is processed and stored in the
+`<html lang>` of its `index.html`, so opening it from the shelf is enough for
+the server to know which voice to read it with. If the model is missing it
+prints the `curl` that fetches it and falls back to English meanwhile.
 
 ## Usage
 
@@ -66,7 +73,8 @@ is no longer needed for reading (only to regenerate it).
 | `lib_pro.py` | extraction, cleanup and HTML assembly |
 | `tabla.py` | decoding of the broken font (see below) |
 | `plantilla.py` | the reading page: layout, controls and bookmark |
-| `servidor.py` | serves the page and synthesizes with Piper on demand |
+| `servidor.py` | serves the page, picks the voice and synthesizes with Piper |
+| `pruebas.py` | checks on the margin, the pagination and the language |
 
 ## Things I learned along the way
 
@@ -98,8 +106,63 @@ against 253 curves and 217 rects. You locate the region and rasterize it with
 `page.crop(bbox).to_image()`. And the bounding box of the strokes doesn't
 include the text labels, so it has to be stretched or they come out cut in half.
 
+**Columns have to be split before the lines are extracted.** The IU course notes
+carry the keywords in a column of their own beside the body text.
+`extract_text_lines` doesn't see it as a column: it merges the note and the body
+line into a single line, and out came `auf Sympathien Logik Der Begriff
+bezeichnet für einzelne Politiker:innen zurück`. Discarding the line afterwards
+doesn't help, because note and body live inside the same object.
+
+The column is found by projecting every word onto the x axis and looking for the
+widest band no word crosses. Inside a paragraph there is no such band: with
+thirty lines stacked up, any `x` in the text block is covered by some word.
+Measured on this book, single-column pages give 0 or 3 pt, pages with a margin
+note give 11 or 12, and the channel before the footer page number gives 54. With
+two safeguards: a page with few words is never split, and neither is one with
+plenty of text on both sides, because that is not a note but the whole page.
+
+Then each column is merged on its own. Interleaved, nothing merges at all: every
+body line has a note line behind it and never reaches the next one. And within
+the note column, two consecutive notes are separated by the vertical gap or, when
+they sit flush, by the bold heading.
+
+**The left margin is not the minimum either.** It was computed as `min(x0)`, so a
+single line further left made *every* other line look indented and get glued to
+the previous paragraph. The real margin is the most frequent `x0`.
+
+**Not every book has a running header.** The header crop was
+`palabras[0]["bottom"] + 2`: drop the first line of every page, no questions
+asked. It is right for ThinkPython, which does carry a running title across all
+240 pages. These course notes carry none, so it ate every section heading
+(`1.2 Was ist wahr?`), the `LEKTION 2` that opens each chapter, and the headings
+of the margin notes. Shape cannot tell them apart: a section heading is also a
+short line set off from the body. The one thing only a header does is **repeat**,
+so the first line of every page is collected and the crop happens only if it is
+the same on at least 40 % of them. Digits are masked before comparing, each run
+by a single mark: otherwise `page 9` and `page 10` differ and the header splits
+into two halves, neither reaching the threshold.
+
+**Headings are in a different font.** A bold subheading was getting glued to the
+paragraph below it (`Alltagswissen und Wissenschaft Das Alltagswissen beruht auf
+Erfahrungen...`). They are found by comparing the line's dominant font against
+the body's, and go in a block of their own, as an `<h3>`. In the note column the
+rule is inverted: there the heading is the term being defined and has to stay
+with its definition.
+
+**The page number comes from pdfplumber.** Enumerating what comes out doesn't
+work: `read_document` skips pages with no text, and from the first blank page on
+every later page was off by one.
+
+**One section per PDF page.** The HTML used to be split every 40 blocks, so the
+reader's page number had nothing to do with the book's: a 142-page book opened
+as 16 and looked like half of it was missing. Now each section is the page it
+came from and `data-pagina` carries the printed number.
+
 ## Limitations
 
-- The voice model is English, so it reads books in English.
+- Only English and German voices; for another language add it to `VOCES` in
+  `lib_pro.py` and download the model.
+- A book written in two languages is read entirely with the voice of whichever
+  weighs more.
 - Figure captions end up inside the PNG and aren't read out loud.
 - Only thoroughly tested with one book.

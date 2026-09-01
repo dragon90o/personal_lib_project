@@ -1,6 +1,7 @@
-# el modelo de voz de Piper pesa 61 MB y se vuelve a bajar cuando haga falta
-en_US-lessac-medium.onnx
-en_US-lessac-medium.onnx.json
+# los modelos de voz de Piper pesan 61 MB cada uno y se vuelven a bajar
+# cuando hagan falta; hay uno por idioma
+*.onnx
+*.onnx.json
 
 # audio generado
 *.wav

@@ -2,12 +2,16 @@
 
 no es una f-string a proposito. el css y el javascript van llenos de
 llaves y en una f-string habria que doblarlas todas, que es justo la
-clase de detalle que se cuela sin avisar. aqui los huecos son @TITULO@ y
-<!--CUERPO-->, y documento_lectura() los sustituye.
+clase de detalle que se cuela sin avisar. aqui los huecos son @TITULO@,
+@IDIOMA@ y <!--CUERPO-->, y documento_lectura() los sustituye.
+
+@IDIOMA@ no es decoracion: el servidor lo lee de vuelta de este html
+para saber con que voz de piper tiene que leer el libro, porque cuando
+se abre un libro de la estanteria el pdf ya no tiene por que estar.
 """
 
 PLANTILLA = """<!DOCTYPE html>
-<html lang="en">
+<html lang="@IDIOMA@">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -42,6 +46,16 @@ main {
 .pagina.activa { display: block; }
 
 p { margin: 0 0 1.2em; }
+h3 {
+  /* los titulos de seccion del libro. llevan data-i como los parrafos,
+     asi que tambien se leen en voz alta y se pueden marcar */
+  font-family: system-ui, sans-serif;
+  font-size: 1.05em;
+  font-weight: 600;
+  color: #e8e4dc;
+  margin: 2.2em 0 .8em;
+}
+.pagina > h3:first-child { margin-top: 0; }
 pre {
   /* el codigo va monoespaciado y sin ajustar: la sangria es sintaxis */
   background: #0e1013;
@@ -172,8 +186,12 @@ function verPagina(n, aMano) {
   if (n < 0 || n >= paginas.length) return;
   paginas.forEach(function (p, i) { p.classList.toggle("activa", i === n); });
   pagina = n;
+  // el numero que se ensena es el de la pagina del pdf, no el indice de
+  // la seccion: las paginas en blanco no llegan a generar seccion, asi
+  // que contar secciones daria un numero que no esta en el libro
   document.getElementById("pagina").textContent =
-    (n + 1) + " / " + paginas.length;
+    paginas[n].getAttribute("data-pagina") + " / " +
+    paginas[paginas.length - 1].getAttribute("data-pagina");
   document.getElementById("anterior").disabled = n === 0;
   document.getElementById("siguiente").disabled = n === paginas.length - 1;
   if (aMano) {

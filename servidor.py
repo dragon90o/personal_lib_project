@@ -14,17 +14,19 @@ toca el disco, va y viene en memoria.
 
 import io
 import os
+import re
 import sys
 import wave
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 from piper import PiperVoice
 
-from lib_pro import generar_html
+from lib_pro import VOCES, VOZ_POR_DEFECTO, generar_html
 
 PUERTO = 8765
-MODELO = "en_US-lessac-medium.onnx"
 BIBLIOTECA = "libros"
+# de aqui salen los modelos de voz, que pesan 61 MB y no van en el repo
+VOCES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 # volver atras un parrafo no deberia costar otra sintesis
 CACHE = {}
 LIMITE = 400
@@ -90,7 +92,7 @@ def preguntar_libro(argumentos):
 
 
 def preparar(pdf, nombre, inicio, rehacer):
-    """deja el libro listo en libros/<nombre>/ y devuelve su url"""
+    """deja el libro listo en libros/<nombre>/ y devuelve (url, idioma)"""
     if nombre is None:
         nombre = os.path.splitext(os.path.basename(pdf))[0]
     carpeta = os.path.join(BIBLIOTECA, nombre)
@@ -102,11 +104,62 @@ def preparar(pdf, nombre, inicio, rehacer):
     elif rehacer or not os.path.isfile(salida):
         os.makedirs(carpeta, exist_ok=True)
         print("preparando %s ..." % nombre)
-        bloques = generar_html(pdf, salida, inicio, titulo=nombre)
-        print("  %d bloques" % len(bloques))
+        bloques, idioma = generar_html(pdf, salida, inicio, titulo=nombre)
+        print("  %d bloques, en %s" % (len(bloques), idioma))
     else:
         print("%s ya estaba preparado (-r para rehacerlo)" % nombre)
-    return "http://localhost:%d/%s/%s/index.html" % (PUERTO, BIBLIOTECA, nombre)
+    url = "http://localhost:%d/%s/%s/index.html" % (PUERTO, BIBLIOTECA, nombre)
+    # se relee del html en vez de arrastrar la variable: asi da igual si
+    # el libro se acaba de preparar o si ya estaba en la estanteria
+    return url, idioma_de(salida)
+
+
+def idioma_de(salida):
+    """el idioma que se le detecto al libro cuando se preparo
+
+    lo lleva puesto el propio html en <html lang>: al abrir un libro de
+    la estanteria el pdf ya no tiene por que seguir en el disco, asi que
+    no se puede volver a mirar el texto.
+    """
+    try:
+        with open(salida, encoding="utf-8") as f:
+            cabecera = f.read(500)
+    except OSError:
+        return VOZ_POR_DEFECTO
+    encontrado = re.search(r'<html lang="([a-z]{2})"', cabecera)
+    return encontrado.group(1) if encontrado else VOZ_POR_DEFECTO
+
+
+def url_voz(modelo):
+    """la direccion de la que se baja un modelo de piper
+
+    el nombre del fichero ya lleva la ruta dentro: de_DE-thorsten-medium
+    esta colgado de de/de_DE/thorsten/medium.
+    """
+    locale, nombre, calidad = modelo[: -len(".onnx")].split("-")
+    return "%s/%s/%s/%s/%s/%s" % (
+        VOCES_URL, locale.split("_")[0], locale, nombre, calidad, modelo
+    )
+
+
+def cargar_voz(idioma):
+    """carga la voz del idioma del libro
+
+    si falta el modelo se avisa con el comando para bajarlo y se sigue
+    con la voz de por defecto: leer aleman con acento ingles es feo,
+    pero es mejor que quedarse sin lector.
+    """
+    modelo = VOCES.get(idioma, VOCES[VOZ_POR_DEFECTO])
+    if not os.path.isfile(modelo):
+        print("falta la voz de %s (%s). para tenerla:" % (idioma, modelo))
+        for fichero in (modelo, modelo + ".json"):
+            print("  curl -LO %s" % url_voz(modelo).replace(modelo, fichero))
+        modelo = VOCES[VOZ_POR_DEFECTO]
+        print("mientras tanto leo con %s" % modelo)
+    if not os.path.isfile(modelo):
+        sys.exit("sin ninguna voz no hay nada que leer: baja %s" % modelo)
+    print("cargando %s ..." % modelo)
+    return PiperVoice.load(modelo)
 
 
 def sintetizar(voz, texto):
@@ -131,7 +184,10 @@ class Lector(SimpleHTTPRequestHandler):
             self.send_error(404)
             return
         largo = int(self.headers.get("Content-Length", 0))
-        texto = self.rfile.read(largo).decode("utf-8").strip()
+        # "replace" y no reventar: el navegador manda utf-8 siempre, pero
+        # si llega un byte suelto mas vale leer el parrafo con un simbolo
+        # raro que cortarle la conexion al lector sin decir nada
+        texto = self.rfile.read(largo).decode("utf-8", "replace").strip()
         if not texto:
             self.send_error(400, "sin texto")
             return
@@ -152,9 +208,8 @@ class Lector(SimpleHTTPRequestHandler):
 
 def main():
     pdf, nombre, inicio, rehacer = preguntar_libro(sys.argv[1:])
-    url = preparar(pdf, nombre, inicio, rehacer)
-    print("cargando %s ..." % MODELO)
-    Lector.voz = PiperVoice.load(MODELO)
+    url, idioma = preparar(pdf, nombre, inicio, rehacer)
+    Lector.voz = cargar_voz(idioma)
     # abrir el navegador solo no es fiable: xdg-open depende del .desktop del
     # navegador por defecto, y hay entradas (Mullvad, por ejemplo) cuyo Exec
     # viene envuelto en un sh -c que se rompe al re-trocearlo.  Imprimir la
