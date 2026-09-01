@@ -44,8 +44,12 @@ def biblioteca():
 
 
 def limpiar_ruta(texto):
-    """al arrastrar el fichero a la terminal vienen comillas pegadas"""
-    return texto.strip().strip('"').strip("'")
+    """al arrastrar el fichero a la terminal vienen comillas pegadas
+
+    el ~ lo expande la shell, pero lo que se teclea en un input() llega
+    crudo: expanduser lo traduce al home (en windows, a %USERPROFILE%).
+    """
+    return os.path.expanduser(texto.strip().strip('"').strip("'"))
 
 
 def pedir_pdf(pdf):
