@@ -56,8 +56,13 @@ def library():
 
 
 def clean_path(text):
-    """Strip the quotes a terminal adds when you drag a file into it."""
-    return text.strip().strip('"').strip("'")
+    """Clean up a path that was typed into the terminal or dragged onto it.
+
+    Dragging a file in brings the quotes along with it. And ~ is expanded by
+    the shell, but whatever is typed at an input() arrives raw, so expanduser
+    has to translate it to the home directory (on Windows, %USERPROFILE%).
+    """
+    return os.path.expanduser(text.strip().strip('"').strip("'"))
 
 
 def ask_pdf(pdf):
