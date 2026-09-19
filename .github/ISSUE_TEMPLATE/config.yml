@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: A PDF that comes out wrong
+    url: https://github.com/dragon90o/personal_lib_project/issues/new?template=bug_report.md
+    about: The most useful kind of report, even without a fix. Say what came out and what the page says.
+  - name: Question or idea
+    url: https://github.com/dragon90o/personal_lib_project/discussions
+    about: For anything that is not a concrete bug. English or Spanish, both fine.

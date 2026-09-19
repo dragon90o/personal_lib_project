@@ -1,17 +1,30 @@
-# los modelos de voz de Piper pesan 61 MB cada uno y se vuelven a bajar
-# cuando hagan falta; hay uno por idioma
+# Piper voice models weigh 61 MB each and can be re-downloaded whenever they
+# are needed; there is one per language. See the README for the curl commands.
 *.onnx
 *.onnx.json
 
-# audio generado
+# generated audio
 *.wav
+
+# virtual environment
+venv/
+.venv/
 
 __pycache__/
 *.pyc
-prueba.html
 
-# el libro de pruebas no es mio y pesa
+# output of the end-to-end check in tests.py
+test_output.html
+
+# the books themselves are copyrighted and heavy: neither the source PDFs nor
+# the processed output belongs in the repo
 *.pdf
+books/
+figures/
+
+# names used before everything moved to English; kept so an older working copy
+# stays ignored
 libro.html
-figuras/
+prueba.html
 libros/
+figuras/

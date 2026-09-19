@@ -1,0 +1,10 @@
+# Reading the PDF: text, per-character font and width, vector strokes.
+pdfplumber>=0.11
+
+# Speech synthesis. Needs a voice model per language, downloaded separately
+# (61 MB each); see the install section of the README.
+#
+# 1.7 is what this was developed and tested against. The code calls
+# PiperVoice.synthesize_wav(..., set_wav_format=False) and reads
+# voice.config.sample_rate, both of which are 1.x API.
+piper-tts>=1.7
