@@ -30,6 +30,8 @@ VOCES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 # volver atras un parrafo no deberia costar otra sintesis
 CACHE = {}
 LIMITE = 400
+# milisegundos de silencio para los parrafos que no tienen nada que leer
+SILENCIO = 300
 
 
 def biblioteca():
@@ -168,7 +170,17 @@ def sintetizar(voz, texto):
         return CACHE[texto]
     memoria = io.BytesIO()
     with wave.open(memoria, "wb") as w:
-        voz.synthesize_wav(texto, w)
+        # el formato se pone a mano: con un parrafo sin palabras ("• ...")
+        # piper no suelta ni un trozo de audio, nadie lo pone y wave
+        # revienta al cerrar con "# channels not specified"
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(voz.config.sample_rate)
+        voz.synthesize_wav(texto, w, set_wav_format=False)
+        if w.getnframes() == 0:
+            # un wav vacio no suena y el navegador no pasaria al siguiente
+            # parrafo: mejor un respiro de silencio
+            w.writeframes(bytes(2 * voz.config.sample_rate * SILENCIO // 1000))
     datos = memoria.getvalue()
     if len(CACHE) > LIMITE:
         CACHE.clear()

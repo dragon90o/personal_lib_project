@@ -89,6 +89,173 @@ def hueco_de_columnas(palabras, ancho, minimo=8, bastantes=40, sobra=0.3):
     return None if menor > len(palabras) * sobra else corte
 
 
+def filas(palabras, tolerancia=3):
+    """las palabras agrupadas en renglones por su altura
+
+    hay que mirar la pagina renglon a renglon y no palabra a palabra: un
+    titulo que cruza las dos columnas solo se reconoce como tal cuando se
+    ve el renglon entero.
+    """
+    fs = []
+    for w in sorted(palabras, key=lambda w: w["top"]):
+        if fs and w["top"] - fs[-1][0]["top"] <= tolerancia:
+            fs[-1].append(w)
+        else:
+            fs.append([w])
+    return fs
+
+
+def marcar(ocupado, fila):
+    """tapa en ocupado las x por las que pasa el renglon"""
+    for w in fila:
+        for x in range(int(w["x0"]), min(int(w["x1"]) + 1, len(ocupado))):
+            ocupado[x] = True
+
+
+def canal(ocupado, minimo, desde, hasta):
+    """el centro de la franja vacia mas ancha entre desde y hasta, o None
+
+    se exige texto a los dos lados: si no, lo que se ha encontrado es el
+    margen de la pagina, que tambien esta vacio y no separa nada.
+    """
+    mejor, x = None, desde
+    while x <= hasta:
+        if ocupado[x]:
+            x += 1
+            continue
+        fin = x
+        while fin <= hasta and not ocupado[fin]:
+            fin += 1
+        if mejor is None or fin - x > mejor[1] - mejor[0]:
+            mejor = (x, fin)
+        x = fin
+    if mejor is None or mejor[1] - mejor[0] < minimo:
+        return None
+    if True not in ocupado[:mejor[0]] or True not in ocupado[mejor[1]:]:
+        return None
+    return (mejor[0] + mejor[1]) / 2
+
+
+def columnas_gemelas(palabras, ancho, franja=0.2, minimo=8, reparto=0.3,
+                     cruzan=0.4, bastantes=10):
+    """si la pagina lleva el canal central de un paper a dos columnas
+
+    hueco_de_columnas() esta hecha para la nota al margen y descarta a
+    proposito el reparto mitad y mitad (sobra=0.3), que es justo la forma
+    de un paper. son dos casos opuestos: la nota es una columna flaca que
+    acompana al cuerpo, y aqui las dos columnas son cuerpo.
+
+    se mira solo la franja central, que es donde cae el canal de un
+    paper, contando para cada x cuantos renglones la pisan. algunos lo
+    cruzan de verdad -- la cabecera corrida, una tabla ancha -- y por eso
+    no se exige que el minimo sea cero. esto no decide como se lee la
+    pagina, solo si el documento es de los de dos columnas.
+    """
+    fs = filas(palabras)
+    if len(fs) < bastantes:
+        return None
+    desde, hasta = int(ancho * (0.5 - franja)), int(ancho * (0.5 + franja))
+    if hasta <= desde:
+        return None
+    tapan = [sum(1 for fila in fs
+                 if any(w["x0"] <= x <= w["x1"] for w in fila))
+             for x in range(desde, hasta + 1)]
+    menos = min(tapan)
+    if menos > len(fs) * cruzan:
+        return None
+    ocupado = [t != menos for t in tapan]
+    corte = canal(ocupado, minimo, 0, len(ocupado) - 1)
+    if corte is None:
+        return None
+    corte += desde
+    izquierda = sum(1 for w in palabras if w["x1"] <= corte)
+    derecha = sum(1 for w in palabras if w["x0"] >= corte)
+    if min(izquierda, derecha) < len(palabras) * reparto:
+        return None
+    return corte
+
+
+def a_dos_columnas(paginas, muestra=6, minimo=0.5):
+    """si el documento entero es un paper maquetado a dos columnas
+
+    se decide sobre el documento y no pagina a pagina porque la primera
+    de un paper no tiene forma de dos columnas: media pagina es titulo,
+    autores y abstract a lo ancho. si el resto del articulo las lleva,
+    esa primera tambien hay que leerla por columnas.
+    """
+    vistas = []
+    for page in paginas[:muestra]:
+        palabras = page.extract_words()
+        if palabras:
+            vistas.append(columnas_gemelas(palabras, page.width) is not None)
+    return bool(vistas) and sum(vistas) >= len(vistas) * minimo
+
+
+def tramos_de_columnas(palabras, ancho, minimo=8, seguidas=4, borde=0.15,
+                       salto=24):
+    """parte la pagina en tramos, cada uno con su corte de columnas o None
+
+    una pagina de paper no tiene una sola maqueta. la primera lleva el
+    titulo y los autores de lado a lado, debajo Keywords y Abstract en
+    dos columnas con el canal muy a la izquierda, y al final el cuerpo en
+    dos columnas centradas. un unico corte para toda la pagina no vale.
+
+    se van juntando renglones mientras a todos ellos les quepa el mismo
+    canal vacio: en cuanto entra uno que lo pisa -- un titulo, una tabla
+    ancha, o el cuerpo, cuyo canal esta en otra x que el del abstract --
+    se cierra el tramo y se empieza otro. los renglones sueltos que no
+    llegan a formar tramo se leen de lado a lado, como estaban.
+
+    el tramo tambien se corta cuando una de las dos columnas se queda en
+    blanco un buen trecho: el "1. Introduction" que va debajo de las
+    keywords respeta el canal del abstract, pero no es la misma maqueta,
+    y colado en esa columna se leia antes que el abstract entero.
+    """
+    fs = filas(palabras)
+    desde, hasta = int(ancho * borde), int(ancho * (1 - borde))
+    tramos, i = [], 0
+    while i < len(fs):
+        ocupado = [False] * (int(ancho) + 2)
+        j, corte, fin = i, None, {}
+        while j < len(fs):
+            fila = fs[j]
+            lados = {}
+            if corte is not None:
+                lados["izquierda"] = [w for w in fila if w["x1"] <= corte]
+                lados["derecha"] = [w for w in fila if w["x0"] >= corte]
+            # el hueco se mide por columnas y no por renglon entero: el
+            # "1. Introduction" comparte renglon con el ultimo "2025)."
+            # del abstract, asi que como renglon no se le nota el salto
+            corta = any(ws and lado in fin
+                        and min(w["top"] for w in ws) - fin[lado] > salto
+                        for lado, ws in lados.items())
+            if corta:
+                break
+            marcar(ocupado, fila)
+            visto = canal(ocupado, minimo, desde, hasta)
+            if visto is None:
+                break
+            for lado, ws in lados.items():
+                if ws:
+                    fin[lado] = max(w["bottom"] for w in ws)
+            corte, j = visto, j + 1
+        if corte is not None and j - i >= seguidas:
+            tramos.append([fs[i:j], corte])
+            i = j
+        elif tramos and tramos[-1][1] is None:
+            tramos[-1][0].append(fs[i])
+            i += 1
+        else:
+            tramos.append([[fs[i]], None])
+            i += 1
+    salida = []
+    for grupo, corte in tramos:
+        arriba = min(w["top"] for fila in grupo for w in fila)
+        abajo = max(w["bottom"] for fila in grupo for w in fila)
+        salida.append((arriba, abajo, corte))
+    return salida
+
+
 def sin_cifras(texto):
     """el texto con los numeros tapados
 
@@ -145,8 +312,10 @@ def read_document(ruta, inicio=0):
     rastro de en que columna estaba.
     """
     with pdfplumber.open(ruta) as r:
-        cabecera = titulo_corrido(r.pages[inicio:])
-        for page in r.pages[inicio:]:
+        paginas = r.pages[inicio:]
+        cabecera = titulo_corrido(paginas)
+        doble = a_dos_columnas(paginas)
+        for page in paginas:
             palabras = page.extract_words()
             if not palabras:
                 continue
@@ -160,12 +329,41 @@ def read_document(ruta, inicio=0):
             cuerpo = [w for w in palabras if w["bottom"] > arriba]
             if not cuerpo:
                 continue
-            def renglones(x0, x1, nota):
-                recorte = page.crop((x0, arriba, x1, page.height))
+            def renglones(x0, x1, nota, y0=None, y1=None):
+                arr = arriba if y0 is None else max(arriba, y0)
+                aba = page.height if y1 is None else min(page.height, y1)
+                if aba - arr < 1 or x1 - x0 < 1:
+                    return []
+                recorte = page.crop((x0, arr, x1, aba))
                 lineas = recorte.extract_text_lines(x_tolerance=1.5)
                 for l in lineas:
                     l["nota"] = nota
                 return lineas
+
+            def por_altura(lineas):
+                # el orden de lectura es de arriba abajo y, a igual
+                # altura, de izquierda a derecha
+                lineas.sort(key=lambda l: (round(l["top"]), l["x0"]))
+                return lineas
+
+            if doble:
+                # en un paper la columna izquierda se lee ENTERA y luego
+                # la derecha. ordenar las dos juntas por altura las
+                # entrelaza renglon a renglon, que es de donde salia
+                # "RAG combines the power of LLMs ... Language Models
+                # (LLMs), has enabled the understanding"
+                texto_del_libro = []
+                for y0, y1, corte in tramos_de_columnas(cuerpo, page.width):
+                    if corte is None:
+                        texto_del_libro += por_altura(
+                            renglones(0, page.width, False, y0 - 1, y1 + 1))
+                    else:
+                        texto_del_libro += por_altura(
+                            renglones(0, corte, False, y0 - 1, y1 + 1))
+                        texto_del_libro += por_altura(
+                            renglones(corte, page.width, False, y0 - 1, y1 + 1))
+                yield page, texto_del_libro
+                continue
 
             corte = hueco_de_columnas(cuerpo, page.width)
             if corte is None:
@@ -177,9 +375,7 @@ def read_document(ruta, inicio=0):
                 cuerpo_izquierda = a_la_izquierda * 2 >= len(cuerpo)
                 texto_del_libro = renglones(0, corte, not cuerpo_izquierda)
                 texto_del_libro += renglones(corte, page.width, cuerpo_izquierda)
-            # el orden de lectura es de arriba abajo y, a igual altura,
-            # de izquierda a derecha
-            texto_del_libro.sort(key=lambda l: (round(l["top"]), l["x0"]))
+            por_altura(texto_del_libro)
 
             yield page, texto_del_libro
 
@@ -519,10 +715,11 @@ def limpiar(texto, cajas=()):
             l["text"] = por_columnas(l["chars"], ancho, izquierda)
     paso = interlineado(codigo)
 
-    cuerpo = [l for l in buenas if not l["nota"]]
-    # el numero de pagina del pie cae en la misma columna que las notas.
-    # es lo unico que se tira del libro entero: no es contenido, y suelto
-    # en su bloque piper lo cantaria en las 138 paginas
+    # el numero de pagina del pie no es contenido, y suelto en su bloque
+    # piper lo cantaria en las 138 paginas. en un libro cae en la misma
+    # columna que las notas; en un paper va centrado y llega como cuerpo
+    cuerpo = [l for l in buenas
+              if not l["nota"] and not l["text"].strip().isdigit()]
     notas = [l for l in buenas if l["nota"] and not l["text"].strip().isdigit()]
     # el titulo de cada nota va en otra fuente que su texto (negrita), y
     # cuando dos notas van seguidas sin hueco es lo unico que las separa
@@ -543,12 +740,41 @@ def limpiar(texto, cajas=()):
     # las notas se juntan por separado y se rompen por el hueco vertical,
     # que estando todas en la misma columna es lo unico que las separa
     bloques += juntar(notas, margen, paso, interlineado(notas) * 1.8)
-    # cada nota se queda a la altura del parrafo que anota
+    # cada nota se queda a la altura del parrafo que anota. sin notas no
+    # hay nada que recolocar, y ordenar por altura seria destruir el
+    # orden de lectura: en un paper la columna derecha empieza arriba del
+    # todo, asi que su primer parrafo se colaba delante del ultimo de la
+    # izquierda y el "2. Background" acababa detras de la seccion 3
+    if not notas:
+        return bloques
     return sorted(bloques, key=lambda b: b["top"])
 
 
 def nuevo_bloque(tipo, linea):
-    return {"tipo": tipo, "texto": linea["text"], "top": linea["top"]}
+    # la x0 se guarda para saber en que columna iba el bloque: es lo que
+    # necesita colocar() para meter una figura en su sitio
+    return {"tipo": tipo, "texto": linea["text"], "top": linea["top"],
+            "x0": linea["x0"]}
+
+
+def colocar(pagina, bloque, cerca=80):
+    """mete el bloque en su sitio sin reordenar el resto de la pagina
+
+    ordenar la pagina entera por altura vale en un libro de una columna,
+    pero en un paper la columna derecha vuelve a empezar arriba del todo:
+    al ordenar, su primer parrafo se colaba delante del ultimo de la
+    izquierda y la seccion 3 se leia antes que la 2.
+
+    la figura se busca sitio ella sola, delante del primer bloque de su
+    misma columna que quede por debajo. si no hay ninguno, es que estaba
+    al pie y se queda al final.
+    """
+    for i, b in enumerate(pagina):
+        if (abs(b.get("x0", bloque["x0"]) - bloque["x0"]) <= cerca
+                and b["top"] > bloque["top"]):
+            pagina.insert(i, bloque)
+            return
+    pagina.append(bloque)
 
 
 def juntar(lineas, margen, paso, hueco=0, titulo_solo=False):
@@ -718,11 +944,10 @@ def generar_html(ruta, salida, inicio=0, carpeta="figuras", titulo=None):
         for i, caja in enumerate(cajas):
             nombre = "p%03d_%d.png" % (n, i)
             rasterizar(page, caja, os.path.join(destino, nombre))
-            pagina.append(
-                {"tipo": "imagen", "texto": carpeta + "/" + nombre, "top": caja[1]}
-            )
-        # la figura tiene que quedar donde estaba, no al final de la pagina
-        pagina.sort(key=lambda b: b["top"])
+            # la figura tiene que quedar donde estaba, no al final de la
+            # pagina, y sin arrastrar el orden de lectura con ella
+            colocar(pagina, {"tipo": "imagen", "top": caja[1], "x0": caja[0],
+                             "texto": carpeta + "/" + nombre})
         for b in pagina:
             b["pagina"] = n
         bloques.extend(pagina)

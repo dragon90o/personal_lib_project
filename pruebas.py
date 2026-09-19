@@ -3,7 +3,7 @@ import re, html as H
 import lib_pro
 from lib_pro import (
     margen_cuerpo, limpiar, a_html, detectar_idioma, hueco_de_columnas,
-    titulo_corrido,
+    titulo_corrido, columnas_gemelas, tramos_de_columnas,
 )
 
 FUENTE = "ABCDEF+Palatino"
@@ -190,5 +190,44 @@ assert '<html lang="de">' in doc, "el idioma no ha llegado al html"
 assert re.findall(r'data-pagina="(\d+)"', doc) == ["26", "27"]
 assert "@IDIOMA@" not in doc and "@TITULO@" not in doc, "hueco sin rellenar"
 assert 'getAttribute("data-pagina")' in doc, "el js no ensena la pagina real"
+
+print("10) las dos columnas de un paper")
+
+# la misma pagina de mitades que hueco_de_columnas descarta a proposito:
+# para columnas_gemelas es justo lo que busca
+mitades = [palabra(82 + 30 * i, 108 + 30 * i, 100.0 + 10 * f)
+           for f in range(40) for i in range(6)]
+mitades += [palabra(320 + 30 * i, 346 + 30 * i, 100.0 + 10 * f)
+            for f in range(40) for i in range(6)]
+corte = columnas_gemelas(mitades, 595.0)
+print("   dos columnas iguales:", corte)
+assert corte is not None and 262 < corte < 320, corte
+
+# una nota al margen no son dos columnas de cuerpo
+print("   con nota al margen  :", columnas_gemelas(conNota, 595.0))
+assert columnas_gemelas(conNota, 595.0) is None
+print("   una sola columna    :", columnas_gemelas(sinNota, 595.0))
+assert columnas_gemelas(sinNota, 595.0) is None
+
+# titulo a lo ancho arriba y debajo el cuerpo a dos columnas: dos tramos,
+# y el de arriba sin corte porque se lee de lado a lado
+conTitulo = [palabra(82, 500, 40.0), palabra(82, 500, 55.0)]
+conTitulo += mitades
+tramos = tramos_de_columnas(conTitulo, 595.0)
+print("   tramos:", [(round(a), round(b), c) for a, b, c in tramos])
+assert len(tramos) == 2, tramos
+assert tramos[0][2] is None, "el titulo no va por columnas"
+assert tramos[1][2] is not None, "el cuerpo si"
+
+# la columna izquierda se queda en blanco a media pagina: lo de debajo ya
+# es otra maqueta y no puede colarse delante de la derecha
+cortada = [palabra(82 + 30 * i, 108 + 30 * i, 100.0 + 10 * f)
+           for f in range(10) for i in range(6)]
+cortada += [palabra(320 + 30 * i, 346 + 30 * i, 100.0 + 10 * f)
+            for f in range(40) for i in range(6)]
+cortada += [palabra(82, 150, 560.0)]
+tramos = tramos_de_columnas(cortada, 595.0)
+print("   con columna corta:", [(round(a), round(b), c) for a, b, c in tramos])
+assert len(tramos) >= 2 and tramos[0][1] < 560, tramos
 
 print("\nTODO OK")
