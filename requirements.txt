@@ -8,3 +8,7 @@ pdfplumber>=0.11
 # PiperVoice.synthesize_wav(..., set_wav_format=False) and reads
 # voice.config.sample_rate, both of which are 1.x API.
 piper-tts>=1.7
+
+# Only for the packaged Windows program (readaloud.spec): its icon next to the
+# clock. Run from source it is not needed; server.py does without it.
+pystray>=0.19

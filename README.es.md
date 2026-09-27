@@ -29,8 +29,10 @@ encima de elegancia.
    listo, haz clic en el libro.
 
 La primera vez descarga la voz del idioma del libro (unos 60 MB, una sola vez).
-Los libros y las voces se guardan en `%LOCALAPPDATA%\ReadAloud`. Para cerrar el
-lector, cierra la ventana negra.
+Funciona en segundo plano con un icono junto al reloj: un clic abre otra vez la
+biblioteca, y clic derecho y *Quit* lo cierra. Los libros se borran desde la
+biblioteca con la papelera de cada uno. Todo se guarda en
+`%LOCALAPPDATA%\ReadAloud`, con un `readaloud.log` por si algo falla.
 
 Windows puede avisar de que el programa es de un editor desconocido, porque no
 está firmado: pulsa *Más información* y luego *Ejecutar de todas formas*.

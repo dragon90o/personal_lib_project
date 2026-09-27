@@ -151,6 +151,7 @@ button:disabled { opacity: .4; cursor: default; }
 #speed { min-width: 3em; text-align: center; font-variant-numeric: tabular-nums; }
 .spacer { flex: 1; }
 #notice { color: #d98b8b; }
+#notice.info { color: #8fbf8f; }
 #colors .icon { width: 1.1em; height: 1.1em; vertical-align: -.2em; }
 
 /* the colors panel, opened from the palette button */
@@ -332,6 +333,28 @@ function preload(i) {
   }).catch(function () {});
 }
 
+// while a paragraph is being waited for, the voice may still be downloading
+// (the first time a language is read): show how far along it is, or the
+// reader just looks stuck. Asks the server once a second until it arrives
+var watching = null;
+function watchDownload(on) {
+  var notice = document.getElementById("notice");
+  if (!on) {
+    clearInterval(watching);
+    watching = null;
+    if (notice.classList.contains("info")) { notice.textContent = ""; notice.classList.remove("info"); }
+    return;
+  }
+  if (watching) return;
+  watching = setInterval(function () {
+    fetch("/library").then(function (r) { return r.json(); }).then(function (d) {
+      if (!watching || !d.download || !d.download.language) return;
+      notice.classList.add("info");
+      notice.textContent = "downloading the voice… " + (d.download.percent || 0) + " % (only the first time)";
+    }).catch(function () {});
+  }, 1000);
+}
+
 function playBlock(i) {
   if (i < 0 || i >= blocks.length) { stop(); return; }
   current = i;
@@ -342,9 +365,11 @@ function playBlock(i) {
     nextWav = null;
   } else {
     blocks[i].classList.add("loading");
+    watchDownload(true);
     ready = fetchWav(i);
   }
   ready.then(function (url) {
+    watchDownload(false);
     blocks[i].classList.remove("loading");
     if (!playing) return;
     audio.src = url;
@@ -355,6 +380,7 @@ function playBlock(i) {
     audio.play();
     preload(i + 1);
   }).catch(function (e) {
+    watchDownload(false);
     blocks[i].classList.remove("loading");
     playing = false;
     drawPlay();
@@ -614,7 +640,36 @@ h2 { font-size: 1rem; font-weight: 600; margin: 2.5rem 0 1rem; color: var(--mute
   text-decoration: none;
   text-align: center;
   transition: background .15s, transform .15s;
+  position: relative;
 }
+/* delete: only shows on the card under the mouse, so the shelf stays quiet */
+.book .del {
+  position: absolute;
+  top: .35rem;
+  right: .35rem;
+  display: flex;
+  padding: .3rem;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity .15s, color .15s;
+}
+.book:hover .del, .book .del:focus { opacity: 1; }
+.book .del:hover { color: var(--error); background: #d98b8b1a; }
+.book .del .icon { width: 16px; height: 16px; fill: none; stroke-width: 2; color: inherit; }
+.book.failed .del { opacity: 1; }
+#download {
+  display: none;
+  margin: 0 0 1.5rem;
+  padding: .6rem .9rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--accent);
+  font-size: .9rem;
+}
+#download.on { display: block; }
 a.book:hover { background: var(--card-hover); transform: translateY(-2px); }
 .book .icon {
   width: 56px;
@@ -692,6 +747,7 @@ button:hover { background: #2b3140; }
   <h1 id="toggle" title="show or hide the books"><span class="chevron">@ICON:chevron-right@</span>@ICON:library-big@ Library <span id="count"></span></h1>
   <p class="lead">Click a book to open it. It picks up where you left off.</p>
 
+  <div id="download"></div>
   <div class="shelf" id="shelf"></div>
 
   <h2>Add a book</h2>
@@ -718,11 +774,14 @@ button:hover { background: #2b3140; }
 
 <!-- the folder icon, copied into each card -->
 <template id="folder">@ICON:folder@</template>
+<template id="trash">@ICON:trash-2@</template>
 
 <script>
 "use strict";
 
 var FOLDER = document.getElementById("folder").innerHTML;
+var TRASH = document.getElementById("trash").innerHTML;
+var LANGUAGES = { en: "English", de: "German" };
 var polling = null;
 
 // the folder name is the file name, underscores and all
@@ -760,7 +819,39 @@ function card(tag, name, cls, meta, lang) {
   m.appendChild(document.createTextNode(meta));
   el.appendChild(n);
   el.appendChild(m);
+  // a book still being prepared cannot be deleted halfway
+  if (cls !== "busy") {
+    var del = document.createElement("button");
+    del.className = "del";
+    del.title = "delete this book";
+    del.innerHTML = TRASH;
+    // the href is read at click time: it is set on the card after this
+    del.onclick = function (e) { remove(name, e, el.getAttribute("href")); };
+    el.appendChild(del);
+  }
   return el;
+}
+
+// deletes it for good: the server removes the book's folder, pdf included.
+// The card is a link, so the click must not also open the book
+function remove(name, e, url) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (!confirm("Delete “" + pretty(name) + "”? It is removed from this computer.")) return;
+  fetch("/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: name })
+  })
+    .then(function (r) {
+      return r.json().then(function (body) {
+        if (!r.ok) throw new Error(body.error || "the server answered " + r.status);
+        // and the bookmark goes with it
+        if (url) { try { localStorage.removeItem("reader:" + url); } catch (err) {} }
+        refresh();
+      });
+    })
+    .catch(function (err) { say(err.message, "bad"); });
 }
 
 function fold(open) {
@@ -795,8 +886,16 @@ function draw(data) {
     p.textContent = "No books yet. Add your first one below.";
     shelf.appendChild(p);
   }
-  // keep asking only while something is being prepared
-  var busy = Object.keys(data.jobs).some(function (k) { return data.jobs[k] === "building"; });
+  // without a console, this is the only place a voice download shows up
+  var d = document.getElementById("download");
+  var downloading = data.download && data.download.language;
+  d.classList.toggle("on", !!downloading);
+  if (downloading) {
+    d.textContent = "Downloading the " + (LANGUAGES[data.download.language] || data.download.language) +
+      " voice… " + (data.download.percent || 0) + " % (only the first time)";
+  }
+  // keep asking only while something is being prepared or downloaded
+  var busy = downloading || Object.keys(data.jobs).some(function (k) { return data.jobs[k] === "building"; });
   if (busy && !polling) polling = setInterval(refresh, 2000);
   if (!busy && polling) { clearInterval(polling); polling = null; }
 }

@@ -16,8 +16,11 @@ a = Analysis(
     # Piper's data (the espeak-ng pronunciation rules) and its compiled
     # espeakbridge are not found by following the imports alone
     binaries=collect_dynamic_libs('piper'),
-    datas=collect_data_files('piper'),
-    hiddenimports=['piper.espeakbridge'],
+    # the icon goes along too: the tray and the browser tab use the png
+    datas=collect_data_files('piper') + [('assets/readaloud.png', 'assets')],
+    # pystray picks its backend at run time, so the Windows one is not found
+    # by following the imports
+    hiddenimports=['piper.espeakbridge', 'pystray._win32'],
 )
 pyz = PYZ(a.pure)
 
@@ -27,8 +30,11 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name='ReadAloud',
-    # with a console window: it shows the voice downloads and the address,
-    # and closing it is how the reader is stopped
-    console=True,
+    icon='assets/readaloud.ico',
+    # no console window: a black window full of text made it look like a
+    # virus. The program lives in the tray instead (Open library / Quit),
+    # what used to be printed goes to readaloud.log in the data folder, and
+    # the voice downloads show up in the pages themselves
+    console=False,
 )
 coll = COLLECT(exe, a.binaries, a.datas, name='ReadAloud')

@@ -29,8 +29,11 @@ diagram or a code block, study material is lost. Fidelity over elegance.
    when it is ready.
 
 The first time, it downloads the voice for the book's language (about 60 MB,
-only once). Books and voices are kept in `%LOCALAPPDATA%\ReadAloud`. Close the
-black window to stop the reader.
+only once). It runs in the background with an icon next to the clock: click it
+to open the library again, or right-click and *Quit* to stop it. Books can be
+deleted from the library with the bin on each one. Everything stays in
+`%LOCALAPPDATA%\ReadAloud`, with a `readaloud.log` there if something goes
+wrong.
 
 Windows may warn that the program comes from an unknown publisher, since it is
 not signed: click *More info* and then *Run anyway*.

@@ -21,6 +21,7 @@ import io
 import json
 import os
 import re
+import shutil
 import sys
 import threading
 import urllib.request
@@ -40,6 +41,10 @@ LIBRARY = "books"
 VOICES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 # one download of a given voice at a time; see ensure_voice()
 DOWNLOAD_LOCK = threading.Lock()
+# the voice being downloaded right now, for the pages to show: without a
+# console there is no other way to see why the first paragraph is slow.
+# {"language": ..., "percent": ...} while it lasts, empty otherwise
+DOWNLOAD = {}
 # where the packaged program (ReadAloud.exe) keeps the books and the voices: the
 # user's own data folder, since the program's folder may be read-only and is
 # replaced on every update. Run from source, everything stays in the project.
@@ -233,6 +238,8 @@ def download(url, path):
                 break
             f.write(chunk)
             done += len(chunk)
+            if total:
+                DOWNLOAD["percent"] = done * 100 // total
             if total and done * 10 // total != shown:
                 shown = done * 10 // total
                 print("  %3d %%  (%d of %d MB)" % (shown * 10, done >> 20, total >> 20))
@@ -252,6 +259,7 @@ def ensure_voice(language):
         if os.path.isfile(model) and os.path.isfile(model + ".json"):
             return model
         print("downloading the %s voice (%s, about 60 MB, only once) ..." % (language, model))
+        DOWNLOAD.update(language=language, percent=0)
         try:
             for name in (model, model + ".json"):
                 if not os.path.isfile(name):
@@ -262,6 +270,8 @@ def ensure_voice(language):
             for name in (model, model + ".json"):
                 print("    curl -LO %s" % voice_url(model).replace(model, name))
             return None
+        finally:
+            DOWNLOAD.clear()
         print("  done")
         return model
 
@@ -357,7 +367,14 @@ class Reader(SimpleHTTPRequestHandler):
                 }
                 for name in names
             ]
-            self.json(200, {"books": books, "jobs": JOBS})
+            self.json(200, {"books": books, "jobs": JOBS, "download": DOWNLOAD})
+        elif path == "/favicon.ico":
+            # the browser asks for it by itself; the png is what it gets
+            try:
+                with open(resource("assets", "readaloud.png"), "rb") as f:
+                    self.reply(200, f.read(), "image/png")
+            except OSError:
+                self.send_error(404)
         else:
             super().do_GET()
 
@@ -370,8 +387,30 @@ class Reader(SimpleHTTPRequestHandler):
             self.upload(query)
         elif parts.path == "/add":
             self.add()
+        elif parts.path == "/delete":
+            self.delete()
         else:
             self.send_error(404)
+
+    def delete(self):
+        """Remove a book for good: its folder, with the page, the figures and
+        the uploaded pdf. A book that failed to prepare can be removed the same
+        way, which also clears it off the shelf."""
+        length = int(self.headers.get("Content-Length", 0))
+        try:
+            name = str(json.loads(self.rfile.read(length) or b"{}").get("name", ""))
+            # only names that are actually on the shelf, never a path: this
+            # deletes folders, so nothing from the request gets near rmtree
+            known = set(library()) | set(JOBS)
+            if name not in known or JOBS.get(name) == "building":
+                raise ValueError("there is no such book to delete")
+            shutil.rmtree(os.path.join(LIBRARY, name), ignore_errors=True)
+            JOBS.pop(name, None)
+            print("deleted %s" % name)
+        except ValueError as e:
+            self.json(400, {"error": str(e)})
+            return
+        self.json(200, {"name": name})
 
     def tts(self, language):
         length = int(self.headers.get("Content-Length", 0))
@@ -447,23 +486,71 @@ class Reader(SimpleHTTPRequestHandler):
         pass
 
 
+class Server(ThreadingHTTPServer):
+    """The HTTP server, refusing a port that is already taken.
+
+    HTTPServer sets SO_REUSEADDR, which on Linux only lets a restart reuse the
+    port straight away, but on Windows lets a second program bind a port that
+    is already being listened on. A second double click on ReadAloud.exe then
+    started a second server instead of noticing the first one. On Windows the
+    option is off, so the bind fails and main() just opens the library.
+    """
+
+    allow_reuse_address = sys.platform != "win32"
+
+
 def frozen():
     """Whether this is the packaged ReadAloud.exe rather than python server.py."""
     return getattr(sys, "frozen", False)
 
 
+def resource(*parts):
+    """A file shipped with the program (the icon): inside the bundle when
+    packaged, next to this script when run from source."""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, *parts)
+
+
 def fail(message):
-    """Stop with a message. The packaged program runs in a window of its own
-    that closes the moment it exits, so there it waits for enter first, or the
-    message would vanish before anyone could read it."""
+    """Stop with a message. The packaged program has no console to print it
+    in, so there it goes in an ordinary Windows message box."""
     print(message)
-    if frozen():
-        input("\npress enter to close")
+    if frozen() and sys.platform == "win32":
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(None, message, APP_NAME, 0x10)
     sys.exit(1)
 
 
+def tray(server, url):
+    """The icon next to the clock, the only visible part of the packaged
+    program: it has no window, and this is how it is reopened and closed.
+
+    It runs on the main thread and blocks until Quit; the server runs on its
+    own thread meanwhile. Without pystray (from source, say) it just serves.
+    """
+    try:
+        import pystray
+        from PIL import Image
+    except ImportError:
+        server.serve_forever()
+        return
+
+    def quit_(icon, _item):
+        icon.stop()
+        server.shutdown()
+
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    menu = pystray.Menu(
+        # default=True: a plain click on the icon opens the library too
+        pystray.MenuItem("Open library", lambda *_: webbrowser.open(url), default=True),
+        pystray.MenuItem("Quit", quit_),
+    )
+    pystray.Icon(APP_NAME, Image.open(resource("assets", "readaloud.png")), APP_NAME, menu).run()
+
+
 def main():
-    """Prepare a book or open the library, and serve until ctrl-c."""
+    """Prepare a book or open the library, and serve until stopped."""
     if frozen():
         # everything below (books/, the voices, the static files the server
         # hands out) is relative, so moving into the data folder is enough
@@ -472,31 +559,44 @@ def main():
         )
         os.makedirs(data, exist_ok=True)
         os.chdir(data)
-        print("%s — books and voices are kept in %s" % (APP_NAME, data))
-    if ensure_voice(DEFAULT_LANGUAGE) is None:
-        fail("without any voice there is nothing to read: connect to the internet and try again")
+        # no console: what would have been printed goes to a log in the same
+        # folder, which is where to look when something goes wrong
+        log = open(os.path.join(data, "readaloud.log"), "w", encoding="utf-8", buffering=1)
+        sys.stdout = sys.stderr = log
+        print("%s - books and voices are kept in %s" % (APP_NAME, data))
     pdf, start, rebuild = choose_book(sys.argv[1:])
     path = prepare(pdf, start, rebuild) if pdf else "/"
     url = "http://localhost:%d%s" % (PORT, path)
     try:
-        server = ThreadingHTTPServer(("127.0.0.1", PORT), Reader)
+        server = Server(("127.0.0.1", PORT), Reader)
     except OSError:
-        # the usual cause is the reader already running in another window;
-        # then the library is already there to be opened
+        # the usual cause is the reader already running: a second double
+        # click then just opens the library, which is what it was for
         webbrowser.open(url)
+        if frozen():
+            sys.exit(0)
         fail("port %d is already in use: the reader is probably already open" % PORT)
     print()
     print("   %s" % url)
     print()
-    print("(close this window to stop)" if frozen() else "(ctrl-c to stop)")
+    print("(ctrl-c to stop)")
     # on Linux opening the browser is not reliable: xdg-open depends on the
     # .desktop entry of the default browser, and some of them (Mullvad, for
     # one) wrap their Exec in a sh -c that breaks when it is re-split. There
     # the printed URL has to do; on Windows and macOS it simply opens.
     if sys.platform in ("win32", "darwin"):
         webbrowser.open(url)
+    # the default voice is fetched after the library is already open, not
+    # before: the first time that is a 60 MB download, and it looked as if the
+    # program had not started. The library does not need a voice; the first
+    # paragraph read waits for it, since load_voice() goes through the same
+    # lock, and the pages show the progress (DOWNLOAD).
+    threading.Thread(target=ensure_voice, args=(DEFAULT_LANGUAGE,), daemon=True).start()
     try:
-        server.serve_forever()
+        if frozen():
+            tray(server, url)
+        else:
+            server.serve_forever()
     finally:
         # without this the port stays taken and the next run fails to bind
         server.server_close()
