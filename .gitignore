@@ -28,3 +28,7 @@ libro.html
 prueba.html
 libros/
 figuras/
+
+# output of `pyinstaller lector.spec` (see lector.spec)
+build/
+dist/

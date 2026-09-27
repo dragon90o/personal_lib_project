@@ -21,7 +21,23 @@ diagram or a code block, study material is lost. Fidelity over elegance.
 - Audio controls, font size and column width.
 - Remembers where you left off in each book.
 
+## Windows: no Python needed
+
+1. Download **ReadAloud-windows.zip** from the [latest release](https://github.com/dragon90o/personal_lib_project/releases/latest).
+2. Unzip it and double-click **ReadAloud.exe** inside the `ReadAloud` folder.
+3. The library opens in your browser. Drag a PDF onto it, and click the book
+   when it is ready.
+
+The first time, it downloads the voice for the book's language (about 60 MB,
+only once). Books and voices are kept in `%LOCALAPPDATA%\ReadAloud`. Close the
+black window to stop the reader.
+
+Windows may warn that the program comes from an unknown publisher, since it is
+not signed: click *More info* and then *Run anyway*.
+
 ## Requirements
+
+To run it from the source code instead:
 
 - Python 3.9 or newer
 - [pdfplumber](https://github.com/jsvine/pdfplumber) for reading the PDF
@@ -36,7 +52,8 @@ venv/Scripts/activate        # on Linux: source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-And one voice model per language:
+The voices are downloaded automatically the first time they are needed. To
+fetch them by hand instead:
 
 ```
 V=https://huggingface.co/rhasspy/piper-voices/resolve/main
@@ -48,8 +65,12 @@ curl -LO $V/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx.json
 
 Each book's language is detected when it is processed and stored in the
 `<html lang>` of its `index.html`, so opening it from the shelf is enough for
-the server to know which voice to read it with. If the model is missing it
-prints the `curl` that fetches it and falls back to English meanwhile.
+the server to know which voice to read it with. If the model is missing it is
+downloaded; if that fails (no internet), it prints the `curl` that fetches it
+and falls back to English meanwhile.
+
+To build the Windows version yourself: `pip install pyinstaller`, then
+`pyinstaller readaloud.spec`. The result is in `dist/ReadAloud/`.
 
 ## Usage
 

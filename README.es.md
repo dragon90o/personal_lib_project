@@ -21,7 +21,23 @@ encima de elegancia.
 - Controles de audio, tamaño de letra y ancho de columna.
 - Guarda por dónde ibas en cada libro.
 
+## Windows: sin instalar Python
+
+1. Descarga **ReadAloud-windows.zip** de la [última versión](https://github.com/dragon90o/personal_lib_project/releases/latest).
+2. Descomprímelo y haz doble clic en **ReadAloud.exe**, dentro de la carpeta `ReadAloud`.
+3. La biblioteca se abre en el navegador. Arrastra un PDF encima y, cuando esté
+   listo, haz clic en el libro.
+
+La primera vez descarga la voz del idioma del libro (unos 60 MB, una sola vez).
+Los libros y las voces se guardan en `%LOCALAPPDATA%\ReadAloud`. Para cerrar el
+lector, cierra la ventana negra.
+
+Windows puede avisar de que el programa es de un editor desconocido, porque no
+está firmado: pulsa *Más información* y luego *Ejecutar de todas formas*.
+
 ## Requisitos
+
+Para usarlo desde el código fuente:
 
 - Python 3.9 o posterior
 - [pdfplumber](https://github.com/jsvine/pdfplumber) para leer el PDF
@@ -38,7 +54,8 @@ venv/Scripts/activate        # en Linux: source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Y un modelo de voz por idioma:
+Las voces se descargan solas la primera vez que hacen falta. Para bajarlas a
+mano:
 
 ```
 V=https://huggingface.co/rhasspy/piper-voices/resolve/main
@@ -50,8 +67,12 @@ curl -LO $V/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx.json
 
 El idioma de cada libro se detecta solo al prepararlo y se guarda en el
 `<html lang>` de su `index.html`, así que al abrirlo desde la estantería el
-servidor ya sabe con qué voz leerlo. Si falta el modelo, te dice el `curl` que
-lo baja y mientras tanto lee con el inglés.
+servidor ya sabe con qué voz leerlo. Si falta el modelo, lo descarga; si no
+puede (sin internet), te dice el `curl` que lo baja y mientras tanto lee con el
+inglés.
+
+Para construir tú la versión de Windows: `pip install pyinstaller` y luego
+`pyinstaller readaloud.spec`. El resultado queda en `dist/ReadAloud/`.
 
 ## Uso
 

@@ -23,6 +23,7 @@ import os
 import re
 import sys
 import threading
+import urllib.request
 import wave
 import webbrowser
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
@@ -37,6 +38,12 @@ PORT = 8765
 LIBRARY = "books"
 # where the voice models come from; they weigh 61 MB and are not in the repo
 VOICES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
+# one download of a given voice at a time; see ensure_voice()
+DOWNLOAD_LOCK = threading.Lock()
+# where the packaged program (ReadAloud.exe) keeps the books and the voices: the
+# user's own data folder, since the program's folder may be read-only and is
+# replaced on every update. Run from source, everything stays in the project.
+APP_NAME = "ReadAloud"
 # stepping back a paragraph should not cost another synthesis. keyed by the
 # language and the text, so it survives moving between pages and books
 CACHE = {}
@@ -154,6 +161,9 @@ def build(pdf, name, start):
             pdf, os.path.join(folder, "index.html"), start, title=name
         )
         print("  %d blocks, in %s" % (len(blocks), language))
+        # the voice is fetched now, while the page still says "preparing",
+        # rather than on the first paragraph, where the wait has no explanation
+        ensure_voice(language)
         JOBS.pop(name, None)
     except Exception as e:
         print("  %s failed: %s" % (name, e))
@@ -207,21 +217,65 @@ def voice_url(model):
     )
 
 
-def load_voice(language):
-    """Load the voice for the language of the book.
+def download(url, path):
+    """Fetch url into path, printing the progress as it goes.
 
-    A missing model is reported together with the command that fetches it, and
-    reading carries on with the default voice: German read with an English
-    accent is ugly, but it beats having no reader at all.
+    It goes to a .part file that is renamed only once complete, so a download
+    cut halfway never leaves behind a model that looks fine and fails to load.
+    """
+    part = path + ".part"
+    with urllib.request.urlopen(url, timeout=60) as r, open(part, "wb") as f:
+        total = int(r.headers.get("Content-Length") or 0)
+        done, shown = 0, -1
+        while True:
+            chunk = r.read(1 << 16)
+            if not chunk:
+                break
+            f.write(chunk)
+            done += len(chunk)
+            if total and done * 10 // total != shown:
+                shown = done * 10 // total
+                print("  %3d %%  (%d of %d MB)" % (shown * 10, done >> 20, total >> 20))
+    os.replace(part, path)
 
-    main() has already checked that the default model is on disk, so there is
-    always something to fall back to.
+
+def ensure_voice(language):
+    """Make sure the model for a language is on disk, downloading it if not.
+
+    Returns the model's file name, or None when it is missing and could not be
+    fetched (no internet, say). The small .json goes second, and a model counts
+    as present only when both are there. The lock stops two books in the same
+    language from fetching the same 61 MB at once.
     """
     model = VOICES.get(language, VOICES[DEFAULT_LANGUAGE])
-    if not os.path.isfile(model):
-        print("the %s voice is missing (%s). to get it:" % (language, model))
-        for name in (model, model + ".json"):
-            print("  curl -LO %s" % voice_url(model).replace(model, name))
+    with DOWNLOAD_LOCK:
+        if os.path.isfile(model) and os.path.isfile(model + ".json"):
+            return model
+        print("downloading the %s voice (%s, about 60 MB, only once) ..." % (language, model))
+        try:
+            for name in (model, model + ".json"):
+                if not os.path.isfile(name):
+                    download(voice_url(model).replace(model, name), name)
+        except OSError as e:
+            print("  could not download it: %s" % e)
+            print("  it can also be fetched by hand:")
+            for name in (model, model + ".json"):
+                print("    curl -LO %s" % voice_url(model).replace(model, name))
+            return None
+        print("  done")
+        return model
+
+
+def load_voice(language):
+    """Load the voice for the language of the book, downloading it if needed.
+
+    If it cannot be had, reading carries on with the default voice: German
+    read with an English accent is ugly, but it beats having no reader at all.
+    main() has already made sure the default is on disk, so there is always
+    something to fall back to.
+    """
+    model = ensure_voice(language)
+    if model is None:
         model = VOICES[DEFAULT_LANGUAGE]
         print("reading with %s in the meantime" % model)
     print("loading %s ..." % model)
@@ -393,19 +447,48 @@ class Reader(SimpleHTTPRequestHandler):
         pass
 
 
+def frozen():
+    """Whether this is the packaged ReadAloud.exe rather than python server.py."""
+    return getattr(sys, "frozen", False)
+
+
+def fail(message):
+    """Stop with a message. The packaged program runs in a window of its own
+    that closes the moment it exits, so there it waits for enter first, or the
+    message would vanish before anyone could read it."""
+    print(message)
+    if frozen():
+        input("\npress enter to close")
+    sys.exit(1)
+
+
 def main():
     """Prepare a book or open the library, and serve until ctrl-c."""
-    default = VOICES[DEFAULT_LANGUAGE]
-    if not os.path.isfile(default):
-        sys.exit("without any voice there is nothing to read: fetch %s" % default)
+    if frozen():
+        # everything below (books/, the voices, the static files the server
+        # hands out) is relative, so moving into the data folder is enough
+        data = os.path.join(
+            os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), APP_NAME
+        )
+        os.makedirs(data, exist_ok=True)
+        os.chdir(data)
+        print("%s — books and voices are kept in %s" % (APP_NAME, data))
+    if ensure_voice(DEFAULT_LANGUAGE) is None:
+        fail("without any voice there is nothing to read: connect to the internet and try again")
     pdf, start, rebuild = choose_book(sys.argv[1:])
     path = prepare(pdf, start, rebuild) if pdf else "/"
     url = "http://localhost:%d%s" % (PORT, path)
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Reader)
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", PORT), Reader)
+    except OSError:
+        # the usual cause is the reader already running in another window;
+        # then the library is already there to be opened
+        webbrowser.open(url)
+        fail("port %d is already in use: the reader is probably already open" % PORT)
     print()
     print("   %s" % url)
     print()
-    print("(ctrl-c to stop)")
+    print("(close this window to stop)" if frozen() else "(ctrl-c to stop)")
     # on Linux opening the browser is not reliable: xdg-open depends on the
     # .desktop entry of the default browser, and some of them (Mullvad, for
     # one) wrap their Exec in a sh -c that breaks when it is re-split. There
