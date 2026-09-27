@@ -143,11 +143,17 @@ still unmapped — that is how the table was built and how it gets extended.
 
 ## Read time
 
-`server.py` starts an `HTTPServer` on port 8765 with `Reader`, a
-`SimpleHTTPRequestHandler` that also answers `POST /tts`.
+`server.py` starts a `ThreadingHTTPServer` on port 8765 with `Reader`, a
+`SimpleHTTPRequestHandler` that also serves the library page (`SHELF` in
+`template.py`, fed by `GET /library`) and answers `POST /tts`, `POST /upload`
+(a PDF chosen in the browser, as the raw body) and `POST /add` (a path on disk).
+New books are prepared on a background thread and reported through `JOBS`,
+which the library page polls until the book shows up on the shelf.
 
-The voice is chosen from `<html lang>` in the book's own HTML (`language_of()`),
-not from the PDF: when a book is opened off the shelf, the PDF may be long gone.
+The voice is chosen from `<html lang>` in the book's own HTML, not from the PDF:
+when a book is opened off the shelf, the PDF may be long gone. The page sends
+it along as `/tts?lang=`, and `voice_for()` loads each language's model the
+first time it is needed.
 A missing model prints the `curl` that fetches it and falls back to English.
 
 The JavaScript in `template.py` holds the reading state:

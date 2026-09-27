@@ -157,7 +157,7 @@ def channel(occupied, minimum, start, stop):
 
 
 def twin_columns(words, width, band=0.2, minimum=8, split=0.3,
-                 crossing=0.4, enough=10):
+                 crossing=0.4, enough=10, slack=2):
     """Whether the page carries the central channel of a two-column paper.
 
     margin_note_gap() is built for the margin note and deliberately rejects a
@@ -170,6 +170,12 @@ def twin_columns(words, width, band=0.2, minimum=8, split=0.3,
     running header, a wide table -- which is why the minimum is not required to
     be zero. This does not decide how the page is read, only whether the
     document is one of the two-column kind.
+
+    The count does not stay flat along the channel: in AutoPT (IEEE TIFS) one
+    row steps on it at some x and two at others, and requiring the exact
+    minimum everywhere broke the channel into pieces shorter than `minimum`,
+    so the paper was taken for single-column and read across both. `slack`
+    admits that wobble.
     """
     rs = rows(words)
     if len(rs) < enough:
@@ -183,7 +189,7 @@ def twin_columns(words, width, band=0.2, minimum=8, split=0.3,
     fewest = min(covering)
     if fewest > len(rs) * crossing:
         return None
-    occupied = [c != fewest for c in covering]
+    occupied = [c > fewest + slack for c in covering]
     cut = channel(occupied, minimum, 0, len(occupied) - 1)
     if cut is None:
         return None

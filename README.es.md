@@ -59,16 +59,17 @@ lo baja y mientras tanto lee con el inglés.
 python server.py
 ```
 
-Enseña los libros que ya tienes preparados y te deja elegir, o le das la ruta de
-un PDF nuevo y lo procesa. También directo:
+Abre la biblioteca en el navegador: una carpeta por libro, clic para leer. Los
+libros nuevos se añaden desde la misma página, eligiendo el PDF desde una carpeta
+(o arrastrándolo) o pegando su ruta. También directo:
 
 ```
 python server.py libro.pdf 26     # empezando en la pagina 26, saltando el indice
 python server.py libro.pdf 26 -r  # rehaciendo el html
 ```
 
-El servidor imprime una dirección `http://localhost:8765/...` para abrir en el
-navegador. Barra espaciadora para leer y pausar, flechas para moverse de
+El servidor imprime una dirección `http://localhost:8765/...` (y la abre solo en
+Windows y macOS). Barra espaciadora para leer y pausar, flechas para moverse de
 párrafo, PageUp/PageDown para cambiar de página, y clic en cualquier párrafo
 para empezar a leer justo ahí.
 
@@ -96,7 +97,8 @@ etapa por etapa está en [ARCHITECTURE.md](ARCHITECTURE.md) (en inglés).
 |---|---|
 | `book.py` | extracción, limpieza y montaje del HTML |
 | `fontmap.py` | descifrado de la fuente rota (ver abajo) |
-| `template.py` | la página de lectura: maquetación, controles y marcador |
+| `template.py` | la página de lectura y la de la biblioteca |
+| `icons.py` | los iconos de Lucide que usan ambas, copiados para que funcione sin internet |
 | `server.py` | sirve la página, elige la voz y sintetiza con Piper |
 | `tests.py` | comprobaciones del margen, la paginación y el idioma |
 | `books/` | una carpeta por libro procesado (no va en el repo) |

@@ -57,16 +57,17 @@ prints the `curl` that fetches it and falls back to English meanwhile.
 python server.py
 ```
 
-It lists the books you already have prepared and lets you pick one, or you give
-it the path to a new PDF and it processes it. Also directly:
+It opens the library in the browser: one folder per book, click to read. New
+books are added from the same page, either by choosing the PDF from a folder
+(or dragging it in) or by pasting its path. Also directly:
 
 ```
 python server.py book.pdf 26     # starting at page 26, skipping the index
 python server.py book.pdf 26 -r  # rebuilding the html
 ```
 
-The server prints a `http://localhost:8765/...` URL to open in the browser.
-Spacebar to read and pause, arrow keys to move between paragraphs,
+The server prints a `http://localhost:8765/...` URL (and opens it on Windows
+and macOS). Spacebar to read and pause, arrow keys to move between paragraphs,
 PageUp/PageDown to change page, and click any paragraph to start reading right
 there.
 
@@ -94,7 +95,8 @@ text of a paragraph to `/tts` and the server hands back a WAV. See
 |---|---|
 | `book.py` | extraction, cleanup and HTML assembly |
 | `fontmap.py` | decoding of the broken font (see below) |
-| `template.py` | the reading page: layout, controls and bookmark |
+| `template.py` | the reading page and the library page |
+| `icons.py` | the Lucide icons both pages use, copied in so it works offline |
 | `server.py` | serves the page, picks the voice and synthesizes with Piper |
 | `tests.py` | checks on the margin, the pagination and the language |
 | `books/` | one folder per processed book (not in the repo) |
