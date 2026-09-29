@@ -50,6 +50,10 @@ jobs:
           python-version: ${{ env.PYTHON }}
       - run: pip install -r requirements.txt pyinstaller
       - run: pyinstaller readaloud.spec --noconfirm --clean
+      - name: Check that the program starts and speaks
+        # the exe just built, run as a user would: the library has to answer
+        # and the voice has to turn a sentence into audio (packaging/smoke_test.py)
+        run: python packaging/smoke_test.py dist/ReadAloud/ReadAloud.exe
       - name: Pack the .msix
         shell: pwsh
         run: |
@@ -63,7 +67,7 @@ jobs:
             Sort-Object FullName | Select-Object -Last 1
           & $makeappx.FullName pack /d $pkg /p "ReadAloudPDFLibrary_${{ needs.version.outputs.msix }}_x64.msix" /o
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: windows
           path: ReadAloudPDFLibrary_*.msix
@@ -93,29 +97,16 @@ jobs:
           # extract-and-run: the runner has no FUSE to mount it
           ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run \
             "$app" "ReadAloud-${{ needs.version.outputs.short }}-x86_64.AppImage"
-      - name: Check that the AppImage starts
-        # nobody here has Linux to try it: start the program just built, as a
-        # user would, and wait for the library to answer. If it never does, the
-        # build fails and nothing is published
+      - name: Check that the AppImage starts and speaks
+        # nobody here has Linux to try it: the AppImage just built, run as a
+        # user would. The library has to answer and the voice has to turn a
+        # sentence into audio, or the build fails and nothing is published
+        # (packaging/smoke_test.py; extract-and-run: the runner has no FUSE)
         run: |
           app=$(ls ReadAloud-*.AppImage)
           chmod +x "$app"
-          "./$app" --appimage-extract-and-run > run.log 2>&1 &
-          pid=$!
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8765/ | grep -q UI_TEXT; then
-              echo "the library answers"
-              kill $pid
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "the library never answered"
-          cat run.log
-          cat ~/.local/share/ReadAloud/readaloud.log 2>/dev/null
-          kill $pid
-          exit 1
-      - uses: actions/upload-artifact@v5
+          python packaging/smoke_test.py "./$app" --appimage-extract-and-run
+      - uses: actions/upload-artifact@v6
         with:
           name: linux
           path: ReadAloud-*.AppImage
@@ -126,7 +117,7 @@ jobs:
     needs: [version, windows, linux]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with:
           path: out
           merge-multiple: true
