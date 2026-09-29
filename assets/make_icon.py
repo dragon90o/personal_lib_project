@@ -1,4 +1,13 @@
-"""Draws the ReadAloud icon: an open book with sound waves coming out of it.
+"""Draws the FIRST ReadAloud icon (the pale book on a dark green square).
+
+NOT the current one. Since 29-09-2026 the icon is readaloud-1024.png: the
+Microsoft Store icon (line-drawn book with sound waves) in dravvt green on plain
+black, and readaloud.png / .ico are scaled down from it. This script is kept
+only as the first version; running it would overwrite the current icon.
+
+Original description:
+
+Draws the ReadAloud icon: an open book with sound waves coming out of it.
 
 Drawn in code rather than in an editor, so it can be tweaked by changing a
 number and regenerated:

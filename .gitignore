@@ -32,3 +32,9 @@ figuras/
 # output of `pyinstaller lector.spec` (see lector.spec)
 build/
 dist/
+
+# the OpenAI key for the optional translation add-on (translate.py)
+translate.env
+# and the add-on itself: personal, never in the repo nor in the published
+# program (server.py runs the same without it)
+translate.py

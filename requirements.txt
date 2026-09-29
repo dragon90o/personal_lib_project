@@ -9,6 +9,11 @@ pdfplumber>=0.11
 # voice.config.sample_rate, both of which are 1.x API.
 piper-tts>=1.7
 
+# Putting sideways figures upright when they are pictures, with the words in
+# the pixels (orientation.py). Runs on the onnxruntime Piper already brings;
+# without it those pictures just stay as the book printed them.
+rapidocr_onnxruntime>=1.2
+
 # Only for the packaged Windows program (readaloud.spec): its icon next to the
 # clock. Run from source it is not needed; server.py does without it.
 pystray>=0.19

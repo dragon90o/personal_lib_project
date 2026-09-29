@@ -30,6 +30,7 @@ import pdfplumber
 from piper import PiperVoice
 from template import TEMPLATE
 from fontmap import decode, TABLE
+from orientation import straighten
 
 DOCUMENT_PATH = "ThinkPython.pdf"
 FIRST_PAGE = 25
@@ -40,6 +41,7 @@ FIRST_PAGE = 25
 VOICES = {
     "en": "en_US-lessac-medium.onnx",
     "de": "de_DE-thorsten-medium.onnx",
+    "es": "es_ES-davefx-medium.onnx",
 }
 DEFAULT_LANGUAGE = "en"
 
@@ -53,6 +55,12 @@ STOP_WORDS = {
     "en": set("""the and of to is not are that with this for from have has
              was were will can be an it on at by as their which such
              about into these than""".split()),
+    # none of them is also a common English or German word ("de", "en", "la"
+    # and "son" are left out for that reason); accented ones like "tambien"
+    # without the accent, as above
+    "es": set("""que los las del una por para con como pero esta este sus
+             entre sobre tambien cuando muy hay sin desde puede esto eso
+             donde otros cada hace""".split()),
 }
 
 
@@ -975,6 +983,8 @@ def generate_html(path, out, start=0, folder="figures", title=None):
         for i, box in enumerate(boxes):
             name = "p%03d_%d.png" % (n, i)
             rasterize(page, box, os.path.join(dest, name))
+            # figures printed sideways (wider than the page) come out upright
+            straighten(page, box, os.path.join(dest, name))
             # the figure has to stay where it was, not at the end of the page,
             # and without dragging the reading order along with it
             place(page_blocks, {"kind": "image", "top": box[1], "x0": box[0],

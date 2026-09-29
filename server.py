@@ -32,6 +32,19 @@ from urllib.parse import parse_qs, quote, urlsplit
 
 from piper import PiperVoice
 
+# import translate
+# The translation add-on (translate.py) is personal: it stays on this computer,
+# out of git and out of the published program. Without it the reader works the
+# same, with no translate button and no /translate routes.
+try:
+    import translate
+except ImportError:
+    class translate:  # noqa: N801 -- stands in for the missing module
+        ENABLED = False
+
+        @staticmethod
+        def warm_up(_ensure_voice):
+            pass
 from book import VOICES, DEFAULT_LANGUAGE, generate_html
 from template import SHELF
 
@@ -49,6 +62,53 @@ DOWNLOAD = {}
 # user's own data folder, since the program's folder may be read-only and is
 # replaced on every update. Run from source, everything stays in the project.
 APP_NAME = "ReadAloud"
+
+
+class UserError(ValueError):
+    """A problem the library page shows to the person, in their language.
+
+    The message stays in English (the log, and the fallback); the code and the
+    book name go to the page, which has the translations (I18N in template.py,
+    keys err_<code>).
+    """
+
+    def __init__(self, code, message, name=""):
+        super().__init__(message)
+        self.code = code
+        self.name = name
+
+
+# The tray menu, in the language of Windows. The pages pick theirs from the
+# browser (I18N in template.py); the tray has no browser to ask.
+TRAY_TEXT = {
+    "en": {"open": "Open library", "quit": "Quit"},
+    "de": {"open": "Bibliothek öffnen", "quit": "Beenden"},
+    "es": {"open": "Abrir biblioteca", "quit": "Salir"},
+}
+
+
+def system_language():
+    """Two-letter code of the Windows display language ("es"), "en" if unknown."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            import locale
+
+            lcid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+            return (locale.windows_locale.get(lcid) or "en")[:2]
+        import locale
+
+        return (locale.getlocale()[0] or "en")[:2].lower()
+    except Exception:
+        return "en"
+
+
+def error_body(e):
+    """The JSON for a refused request: the English message and, if it has one,
+    the code the page translates."""
+    return {"error": str(e), "code": getattr(e, "code", None), "name": getattr(e, "name", "")}
+
+
 # stepping back a paragraph should not cost another synthesis. keyed by the
 # language and the text, so it survives moving between pages and books
 CACHE = {}
@@ -111,7 +171,7 @@ def book_name(filename):
     name = os.path.splitext(os.path.basename(filename.replace("\\", "/")))[0]
     name = name.strip()
     if name in ("", ".", ".."):
-        raise ValueError("that file has no usable name")
+        raise UserError("no_name", "that file has no usable name")
     return name
 
 
@@ -178,9 +238,9 @@ def build(pdf, name, start):
 def check_new(name):
     """Refuse a book the library already has, or is already preparing."""
     if name in library():
-        raise ValueError("“%s” is already in the library" % name)
+        raise UserError("exists", "“%s” is already in the library" % name, name)
     if JOBS.get(name) == "building":
-        raise ValueError("“%s” is already being prepared" % name)
+        raise UserError("preparing", "“%s” is already being prepared" % name, name)
 
 
 def start_build(pdf, name, start):
@@ -345,10 +405,24 @@ class Reader(SimpleHTTPRequestHandler):
         POST /add       {"path": ..., "start": ...} for a pdf already on disk
     """
 
+    def end_headers(self):
+        # A rebuilt book keeps its file names (figures/p048_0.png), so without
+        # this the browser kept showing the old figure, sideways, until Ctrl+F5.
+        # no-cache = ask every time; the files carry Last-Modified, so an
+        # unchanged one costs a 304 and nothing is sent again.
+        if self.command == "GET":
+            self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def do_GET(self):
         path = urlsplit(self.path).path
         if path in ("/", "/index.html"):
-            self.reply(200, SHELF.encode("utf-8"), "text/html; charset=utf-8")
+            # self.reply(200, SHELF.encode("utf-8"), "text/html; charset=utf-8")
+            # the page starts in the language of Windows (the browser often
+            # says English first); only [a-z] reaches the page
+            lang = re.sub(r"[^a-z]", "", system_language())[:2] or "en"
+            page = SHELF.replace("@SYSLANG@", lang)
+            self.reply(200, page.encode("utf-8"), "text/html; charset=utf-8")
         elif path == "/library":
             # newest first: the folded shelf shows only its first row, and
             # that row should be what was added last
@@ -375,6 +449,11 @@ class Reader(SimpleHTTPRequestHandler):
                     self.reply(200, f.read(), "image/png")
             except OSError:
                 self.send_error(404)
+        # the optional translation add-on, see translate.py
+        elif translate.ENABLED and path == "/translate.js":
+            translate.serve_script(self)
+        elif translate.ENABLED and translate.serve_book(self, path):
+            pass
         else:
             super().do_GET()
 
@@ -389,6 +468,8 @@ class Reader(SimpleHTTPRequestHandler):
             self.add()
         elif parts.path == "/delete":
             self.delete()
+        elif translate.ENABLED and parts.path == "/translate":
+            translate.handle_post(self, query)
         else:
             self.send_error(404)
 
@@ -403,12 +484,12 @@ class Reader(SimpleHTTPRequestHandler):
             # deletes folders, so nothing from the request gets near rmtree
             known = set(library()) | set(JOBS)
             if name not in known or JOBS.get(name) == "building":
-                raise ValueError("there is no such book to delete")
+                raise UserError("no_book", "there is no such book to delete")
             shutil.rmtree(os.path.join(LIBRARY, name), ignore_errors=True)
             JOBS.pop(name, None)
             print("deleted %s" % name)
         except ValueError as e:
-            self.json(400, {"error": str(e)})
+            self.json(400, error_body(e))
             return
         self.json(200, {"name": name})
 
@@ -451,7 +532,7 @@ class Reader(SimpleHTTPRequestHandler):
                     left -= len(chunk)
             start_build(pdf, name, start)
         except ValueError as e:
-            self.json(400, {"error": str(e)})
+            self.json(400, error_body(e))
             return
         self.json(200, {"name": name})
 
@@ -462,13 +543,13 @@ class Reader(SimpleHTTPRequestHandler):
             request = json.loads(self.rfile.read(length) or b"{}")
             pdf = clean_path(str(request.get("path", "")))
             if not os.path.isfile(pdf):
-                raise ValueError("cannot find %s" % pdf)
+                raise UserError("not_found", "cannot find %s" % pdf, pdf)
             if not pdf.lower().endswith(".pdf"):
-                raise ValueError("that is not a pdf")
+                raise UserError("not_pdf", "that is not a pdf")
             name = book_name(pdf)
             start_build(pdf, name, max(0, int(request.get("start", 1)) - 1))
         except ValueError as e:
-            self.json(400, {"error": str(e)})
+            self.json(400, error_body(e))
             return
         self.json(200, {"name": name})
 
@@ -541,10 +622,13 @@ def tray(server, url):
         server.shutdown()
 
     threading.Thread(target=server.serve_forever, daemon=True).start()
+    words = TRAY_TEXT.get(system_language(), TRAY_TEXT["en"])
     menu = pystray.Menu(
         # default=True: a plain click on the icon opens the library too
-        pystray.MenuItem("Open library", lambda *_: webbrowser.open(url), default=True),
-        pystray.MenuItem("Quit", quit_),
+        # pystray.MenuItem("Open library", lambda *_: webbrowser.open(url), default=True),
+        # pystray.MenuItem("Quit", quit_),
+        pystray.MenuItem(words["open"], lambda *_: webbrowser.open(url), default=True),
+        pystray.MenuItem(words["quit"], quit_),
     )
     pystray.Icon(APP_NAME, Image.open(resource("assets", "readaloud.png")), APP_NAME, menu).run()
 
@@ -592,6 +676,7 @@ def main():
     # paragraph read waits for it, since load_voice() goes through the same
     # lock, and the pages show the progress (DOWNLOAD).
     threading.Thread(target=ensure_voice, args=(DEFAULT_LANGUAGE,), daemon=True).start()
+    translate.warm_up(ensure_voice)
     try:
         if frozen():
             tray(server, url)

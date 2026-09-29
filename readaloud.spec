@@ -16,11 +16,16 @@ a = Analysis(
     # Piper's data (the espeak-ng pronunciation rules) and its compiled
     # espeakbridge are not found by following the imports alone
     binaries=collect_dynamic_libs('piper'),
-    # the icon goes along too: the tray and the browser tab use the png
-    datas=collect_data_files('piper') + [('assets/readaloud.png', 'assets')],
+    # the icon goes along too: the tray and the browser tab use the png.
+    # RapidOCR's models and config.yaml (orientation.py) are data files too
+    datas=collect_data_files('piper') + collect_data_files('rapidocr_onnxruntime')
+    + [('assets/readaloud.png', 'assets')],
     # pystray picks its backend at run time, so the Windows one is not found
     # by following the imports
     hiddenimports=['piper.espeakbridge', 'pystray._win32'],
+    # the personal translation add-on never goes into the published program,
+    # even when built from a folder that has translate.py
+    excludes=['translate'],
 )
 pyz = PYZ(a.pure)
 

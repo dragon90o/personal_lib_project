@@ -16,11 +16,187 @@ into audio; see server.py.
 
 from icons import with_icons
 
+# The words of the interface in English, German and Spanish. The language is
+# the browser's (navigator.languages), falling back to English; it has nothing
+# to do with the language of the book, which is <html lang> and picks the
+# voice. Both pages carry this script (@I18N@) before their own:
+#   tr("key", {name: ...})  a string, with {name} filled in
+#   data-t="key"            on an element: its text
+#   data-t-title="key"      its tooltip;  data-t-placeholder="key" likewise
+# A key missing in one language falls back to the English text.
+I18N = """
+var UI_TEXT = {
+  en: {
+    toggle: "show or hide the books", library: "Library",
+    lead: "Click a book to open it. It picks up where you left off.",
+    addBook: "Add a book", startAt: "Start at page",
+    startHint: "to skip the cover and the table of contents",
+    fromFolder: "From a folder", choosePdf: "Choose a PDF…",
+    dragHint: "or drag the PDF onto this box", fromPath: "From its path", add: "Add",
+    deleteBook: "delete this book",
+    confirmDelete: "Delete “{name}”? It is removed from this computer.",
+    paragraph: "paragraph {n}", notStarted: "not started",
+    preparing: "preparing… this takes a few minutes",
+    empty: "No books yet. Add your first one below.",
+    downloadingVoice: "Downloading the {language} voice… {p} % (only the first time)",
+    serverAnswered: "the server answered {status}",
+    beingPrepared: "“{name}” is being prepared. It will show up above when it is ready.",
+    notPdf: "That is not a PDF.", uploading: "Uploading {name}…",
+    pastePath: "Paste the path to the PDF first.",
+    err_no_name: "that file has no usable name",
+    err_exists: "“{name}” is already in the library",
+    err_preparing: "“{name}” is already being prepared",
+    err_no_book: "there is no such book to delete",
+    err_not_found: "cannot find {name}", err_not_pdf: "that is not a pdf",
+    lang_en: "English", lang_de: "German", lang_es: "Spanish",
+    backLibrary: "back to the library", prevPage: "previous page", nextPage: "next page",
+    colors: "colors", smaller: "smaller text", bigger: "bigger text",
+    narrower: "narrower column", wider: "wider column",
+    background: "Background", text: "Text", highlight: "Highlight", reset: "Reset",
+    themeDefault: "Default",
+    prevParagraph: "previous paragraph", nextParagraph: "next paragraph",
+    stop: "stop and release the audio", slower: "slower", faster: "faster",
+    read: "Read", pause: "Pause", bookmark: "paragraph {n} of {total}",
+    downloadingVoiceShort: "downloading the voice… {p} % (only the first time)",
+    noAudio: "no audio: start server.py ({message})"
+  },
+  de: {
+    toggle: "Bücher ein- oder ausblenden", library: "Bibliothek",
+    lead: "Klicke auf ein Buch, um es zu öffnen. Es geht dort weiter, wo du aufgehört hast.",
+    addBook: "Buch hinzufügen", startAt: "Ab Seite",
+    startHint: "um Titelseite und Inhaltsverzeichnis zu überspringen",
+    fromFolder: "Aus einem Ordner", choosePdf: "PDF auswählen …",
+    dragHint: "oder zieh die PDF-Datei in dieses Feld", fromPath: "Über den Pfad", add: "Hinzufügen",
+    deleteBook: "dieses Buch löschen",
+    confirmDelete: "„{name}“ löschen? Es wird von diesem Computer entfernt.",
+    paragraph: "Absatz {n}", notStarted: "noch nicht begonnen",
+    preparing: "wird vorbereitet … das dauert ein paar Minuten",
+    empty: "Noch keine Bücher. Füge unten dein erstes hinzu.",
+    downloadingVoice: "Die Stimme für {language} wird heruntergeladen … {p} % (nur beim ersten Mal)",
+    serverAnswered: "der Server antwortete {status}",
+    beingPrepared: "„{name}“ wird vorbereitet. Es erscheint oben, sobald es fertig ist.",
+    notPdf: "Das ist keine PDF-Datei.", uploading: "{name} wird hochgeladen …",
+    pastePath: "Füge zuerst den Pfad zur PDF-Datei ein.",
+    err_no_name: "diese Datei hat keinen verwendbaren Namen",
+    err_exists: "„{name}“ ist schon in der Bibliothek",
+    err_preparing: "„{name}“ wird schon vorbereitet",
+    err_no_book: "dieses Buch gibt es nicht",
+    err_not_found: "{name} wurde nicht gefunden", err_not_pdf: "das ist keine PDF-Datei",
+    lang_en: "Englisch", lang_de: "Deutsch", lang_es: "Spanisch",
+    backLibrary: "zurück zur Bibliothek", prevPage: "vorherige Seite", nextPage: "nächste Seite",
+    colors: "Farben", smaller: "kleinere Schrift", bigger: "größere Schrift",
+    narrower: "schmalere Spalte", wider: "breitere Spalte",
+    background: "Hintergrund", text: "Text", highlight: "Markierung", reset: "Zurücksetzen",
+    themeDefault: "Standard",
+    prevParagraph: "vorheriger Absatz", nextParagraph: "nächster Absatz",
+    stop: "anhalten und Audio freigeben", slower: "langsamer", faster: "schneller",
+    read: "Vorlesen", pause: "Pause", bookmark: "Absatz {n} von {total}",
+    downloadingVoiceShort: "Stimme wird heruntergeladen … {p} % (nur beim ersten Mal)",
+    noAudio: "kein Ton: starte server.py ({message})"
+  },
+  es: {
+    toggle: "mostrar u ocultar los libros", library: "Biblioteca",
+    lead: "Haz clic en un libro para abrirlo. Sigue donde lo dejaste.",
+    addBook: "Añadir un libro", startAt: "Empezar en la página",
+    startHint: "para saltarte la portada y el índice",
+    fromFolder: "Desde una carpeta", choosePdf: "Elegir un PDF…",
+    dragHint: "o arrastra el PDF a este recuadro", fromPath: "Desde su ruta", add: "Añadir",
+    deleteBook: "borrar este libro",
+    confirmDelete: "¿Borrar «{name}»? Se elimina de este ordenador.",
+    paragraph: "párrafo {n}", notStarted: "sin empezar",
+    preparing: "preparando… tarda unos minutos",
+    empty: "Aún no hay libros. Añade el primero abajo.",
+    downloadingVoice: "Descargando la voz en {language}… {p} % (solo la primera vez)",
+    serverAnswered: "el servidor respondió {status}",
+    beingPrepared: "«{name}» se está preparando. Aparecerá arriba cuando esté listo.",
+    notPdf: "Eso no es un PDF.", uploading: "Subiendo {name}…",
+    pastePath: "Primero pega la ruta del PDF.",
+    err_no_name: "ese archivo no tiene un nombre válido",
+    err_exists: "«{name}» ya está en la biblioteca",
+    err_preparing: "«{name}» ya se está preparando",
+    err_no_book: "ese libro no existe",
+    err_not_found: "no se encuentra {name}", err_not_pdf: "eso no es un PDF",
+    lang_en: "inglés", lang_de: "alemán", lang_es: "español",
+    backLibrary: "volver a la biblioteca", prevPage: "página anterior", nextPage: "página siguiente",
+    colors: "colores", smaller: "letra más pequeña", bigger: "letra más grande",
+    narrower: "columna más estrecha", wider: "columna más ancha",
+    background: "Fondo", text: "Texto", highlight: "Resaltado", reset: "Restablecer",
+    themeDefault: "Predeterminado",
+    prevParagraph: "párrafo anterior", nextParagraph: "párrafo siguiente",
+    stop: "detener y liberar el audio", slower: "más lento", faster: "más rápido",
+    read: "Leer", pause: "Pausa", bookmark: "párrafo {n} de {total}",
+    downloadingVoiceShort: "descargando la voz… {p} % (solo la primera vez)",
+    noAudio: "sin audio: inicia server.py ({message})"
+  }
+};
+// Which language: the one chosen in the library (EN · DE · ES, kept in
+// localStorage, which the book pages share), else the language of Windows
+// (the server writes it into the library page), else the browser's. Brave or
+// Chrome often list English first even on a Spanish Windows, so the browser
+// alone is not a good guess for a desktop program.
+var UI_LANG = (function () {
+  var chosen = null, current = null;
+  try {
+    chosen = localStorage.getItem("ui:lang");          // picked with EN · DE · ES
+    current = localStorage.getItem("ui:lang:current"); // what the library used last
+  } catch (e) {}
+  var wanted = [chosen, typeof SYSTEM_LANG === "string" ? SYSTEM_LANG : null, current]
+    .concat(navigator.languages || [navigator.language || "en"]);
+  for (var i = 0; i < wanted.length; i++) {
+    var code = String(wanted[i] || "").slice(0, 2).toLowerCase();
+    if (UI_TEXT[code]) return code;
+  }
+  return "en";
+})();
+// the book pages cannot ask the server for the Windows language (they are
+// plain files), so the library leaves its decision here for them. chosen:
+// picked by hand, which then wins over Windows from now on
+function rememberLang(code, chosen) {
+  try {
+    localStorage.setItem("ui:lang:current", code);
+    if (chosen) localStorage.setItem("ui:lang", code);
+  } catch (e) {}
+}
+function tr(key, vars) {
+  var s = UI_TEXT[UI_LANG][key];
+  if (s === undefined) s = UI_TEXT.en[key];
+  if (s === undefined) return key;
+  return s.replace(/\\{(\\w+)\\}/g, function (m, k) {
+    return vars && vars[k] !== undefined ? vars[k] : m;
+  });
+}
+// an error from the server: its code, translated, or its English message
+function trError(body, status) {
+  if (body && body.code) return tr("err_" + body.code, { name: body.name || "" });
+  return (body && body.error) || tr("serverAnswered", { status: status });
+}
+(function () {
+  function each(attr, fn) {
+    Array.prototype.forEach.call(document.querySelectorAll("[" + attr + "]"), function (el) {
+      fn(el, tr(el.getAttribute(attr)));
+    });
+  }
+  each("data-t", function (el, s) { el.textContent = s; });
+  each("data-t-title", function (el, s) { el.title = s; });
+  each("data-t-placeholder", function (el, s) { el.placeholder = s; });
+})();
+"""
+
+
+def with_i18n(page):
+    """Put the interface translations where the page has @I18N@."""
+    return page.replace("@I18N@", I18N)
+
+
 TEMPLATE = """<!DOCTYPE html>
 <html lang="@LANG@">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ?v=4: the browser keeps favicons in a cache of their own that neither
+     Ctrl+F5 nor clearing the cache empties; a new address makes it fetch the
+     current icon. Bump it whenever assets/readaloud.png changes. -->
+<link rel="icon" type="image/png" href="/favicon.ico?v=4">
 <title>@TITLE@</title>
 <style>
 :root {
@@ -197,40 +373,42 @@ button:disabled { opacity: .4; cursor: default; }
 <body>
 
 <div class="bar top">
-  <a class="home" href="/" title="back to the library">@ICON:library-big@</a>
-  <button id="prev" title="previous page">&lsaquo;</button>
+  <a class="home" href="/" title="back to the library" data-t-title="backLibrary">@ICON:library-big@</a>
+  <button id="prev" title="previous page" data-t-title="prevPage">&lsaquo;</button>
   <span id="page-number">1 / 1</span>
-  <button id="next" title="next page">&rsaquo;</button>
+  <button id="next" title="next page" data-t-title="nextPage">&rsaquo;</button>
   <span class="spacer"></span>
   <span id="notice"></span>
-  <button id="colors" title="colors">@ICON:palette@</button>
-  <button id="smaller" title="smaller text">A-</button>
-  <button id="bigger" title="bigger text">A+</button>
-  <button id="narrower" title="narrower column">&#8677;&#8676;</button>
-  <button id="wider" title="wider column">&#8676;&#8677;</button>
+  <button id="colors" title="colors" data-t-title="colors">@ICON:palette@</button>
+  <button id="smaller" title="smaller text" data-t-title="smaller">A-</button>
+  <button id="bigger" title="bigger text" data-t-title="bigger">A+</button>
+  <button id="narrower" title="narrower column" data-t-title="narrower">&#8677;&#8676;</button>
+  <button id="wider" title="wider column" data-t-title="wider">&#8676;&#8677;</button>
 </div>
 
 <div class="panel" id="panel" hidden>
   <div class="themes" id="themes"></div>
-  <label>Background <input type="color" id="c-bg"></label>
-  <label>Text <input type="color" id="c-ink"></label>
-  <label>Highlight <input type="color" id="c-mark"></label>
-  <button id="c-reset">Reset</button>
+  <label><span data-t="background">Background</span> <input type="color" id="c-bg"></label>
+  <label><span data-t="text">Text</span> <input type="color" id="c-ink"></label>
+  <label><span data-t="highlight">Highlight</span> <input type="color" id="c-mark"></label>
+  <button id="c-reset" data-t="reset">Reset</button>
 </div>
 
 <main><!--BODY--></main>
 
 <div class="bar bottom">
-  <button id="back" title="previous paragraph">&#9198;</button>
-  <button id="play">Read</button>
-  <button id="forward" title="next paragraph">&#9197;</button>
-  <button id="stop" title="stop and release the audio">&#9209;</button>
-  <button id="slower" title="slower">&minus;</button>
+  <button id="back" title="previous paragraph" data-t-title="prevParagraph">&#9198;</button>
+  <button id="play" data-t="read">Read</button>
+  <button id="forward" title="next paragraph" data-t-title="nextParagraph">&#9197;</button>
+  <button id="stop" title="stop and release the audio" data-t-title="stop">&#9209;</button>
+  <button id="slower" title="slower" data-t-title="slower">&minus;</button>
   <span id="speed">1.0&times;</span>
-  <button id="faster" title="faster">+</button>
+  <button id="faster" title="faster" data-t-title="faster">+</button>
   <span id="bookmark"></span>
 </div>
 
+<!-- the interface in the browser's language (I18N in template.py) -->
+<script>@I18N@</script>
 <script>
 "use strict";
 
@@ -293,7 +471,7 @@ function highlight() {
 
 function drawBookmark() {
   document.getElementById("bookmark").textContent =
-    "paragraph " + (current + 1) + " of " + blocks.length;
+    tr("bookmark", { n: current + 1, total: blocks.length });
 }
 
 function goTo(i, scroll) {
@@ -318,7 +496,7 @@ function fetchWav(i) {
   var url = "/tts?lang=" + encodeURIComponent(document.documentElement.lang);
   return fetch(url, { method: "POST", body: blocks[i].textContent })
     .then(function (r) {
-      if (!r.ok) throw new Error("the server answered " + r.status);
+      if (!r.ok) throw new Error(tr("serverAnswered", { status: r.status }));
       return r.blob();
     })
     .then(function (b) { return URL.createObjectURL(b); });
@@ -350,7 +528,7 @@ function watchDownload(on) {
     fetch("/library").then(function (r) { return r.json(); }).then(function (d) {
       if (!watching || !d.download || !d.download.language) return;
       notice.classList.add("info");
-      notice.textContent = "downloading the voice… " + (d.download.percent || 0) + " % (only the first time)";
+      notice.textContent = tr("downloadingVoiceShort", { p: d.download.percent || 0 });
     }).catch(function () {});
   }, 1000);
 }
@@ -385,7 +563,7 @@ function playBlock(i) {
     playing = false;
     drawPlay();
     document.getElementById("notice").textContent =
-      "no audio: start server.py (" + e.message + ")";
+      tr("noAudio", { message: e.message });
   });
 }
 
@@ -394,7 +572,7 @@ audio.addEventListener("ended", function () {
 });
 
 function drawPlay() {
-  document.getElementById("play").textContent = playing ? "Pause" : "Read";
+  document.getElementById("play").textContent = playing ? tr("pause") : tr("read");
 }
 
 function play() {
@@ -511,7 +689,8 @@ Object.keys(THEMES).forEach(function (name) {
   s.style.background = t.bg;
   s.style.borderColor = t.mark;
   b.appendChild(s);
-  b.appendChild(document.createTextNode(name));
+  // "Default" is a word; the others are the names of well-known color schemes
+  b.appendChild(document.createTextNode(name === "Default" ? tr("themeDefault") : name));
   b.onclick = function () { setColors(t); };
   document.getElementById("themes").appendChild(b);
 });
@@ -572,6 +751,8 @@ SHELF = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ?v=4: see the note in TEMPLATE above -->
+<link rel="icon" type="image/png" href="/favicon.ico?v=4">
 <title>Library</title>
 <style>
 :root {
@@ -581,8 +762,12 @@ SHELF = """<!DOCTYPE html>
   --border: #262a31;
   --card: #1b1f26;
   --card-hover: #232833;
-  --folder: #c9a55a;
-  --accent: #8fbf8f;
+  /* the green of dravvt (the brand, as on dravvt.com in dark mode) instead of
+     the old folder yellow and soft green */
+  /* --folder: #c9a55a; */
+  /* --accent: #8fbf8f; */
+  --folder: #00ff00;
+  --accent: #00ff00;
   --error: #d98b8b;
 }
 * { box-sizing: border-box; }
@@ -675,7 +860,9 @@ a.book:hover { background: var(--card-hover); transform: translateY(-2px); }
   width: 56px;
   height: 56px;
   color: var(--folder);
-  fill: #c9a55a33;
+  /* fill: #c9a55a33; */
+  /* the inside of the folder: the same green, faint */
+  fill: #00ff001a;
   stroke-width: 1.5;
 }
 .book.busy .icon { color: var(--muted); fill: none; animation: pulse 1.4s ease-in-out infinite; }
@@ -712,7 +899,8 @@ a.book:hover { background: var(--card-hover); transform: translateY(-2px); }
   display: grid;
   gap: 1.1rem;
 }
-.add.dragging { border-color: var(--accent); background: #1c2620; }
+/* .add.dragging { border-color: var(--accent); background: #1c2620; } */
+.add.dragging { border-color: var(--accent); background: #00ff000d; }
 .option { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
 .option b { min-width: 11rem; font-weight: 600; }
 input[type=text], input[type=number] {
@@ -740,48 +928,103 @@ button:hover { background: #2b3140; }
 #message { min-height: 1.2em; font-size: .9rem; }
 #message.bad { color: var(--error); }
 #message.good { color: var(--accent); }
+/* 〰 dravvt · year, small, bottom right */
+footer.brand {
+  position: fixed;
+  right: 1.25rem;
+  bottom: .75rem;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .78rem;
+  color: var(--muted);
+}
+footer.brand a { display: flex; align-items: center; gap: .4rem; color: inherit; text-decoration: none; }
+footer.brand a:hover { color: var(--ink); }
+footer.brand svg { width: 20px; height: 15px; }
+footer.brand path { fill: none; stroke: var(--folder); stroke-width: 8; stroke-linecap: round; }
+/* EN · DE · ES, top right: the chosen one lit */
+.languages { float: right; display: flex; gap: .25rem; }
+.languages button { padding: .2rem .5rem; font-size: .8rem; color: var(--muted); }
+.languages button.on { color: var(--accent); border-color: var(--accent); }
 </style>
 </head>
 <body>
 <main>
-  <h1 id="toggle" title="show or hide the books"><span class="chevron">@ICON:chevron-right@</span>@ICON:library-big@ Library <span id="count"></span></h1>
-  <p class="lead">Click a book to open it. It picks up where you left off.</p>
+  <div id="languages" class="languages"></div>
+  <h1 id="toggle" title="show or hide the books" data-t-title="toggle"><span class="chevron">@ICON:chevron-right@</span>@ICON:library-big@ <span data-t="library">Library</span> <span id="count"></span></h1>
+  <p class="lead" data-t="lead">Click a book to open it. It picks up where you left off.</p>
 
   <div id="download"></div>
   <div class="shelf" id="shelf"></div>
 
-  <h2>Add a book</h2>
+  <h2 data-t="addBook">Add a book</h2>
   <div class="add" id="add">
     <div class="option">
-      <b>Start at page</b>
+      <b data-t="startAt">Start at page</b>
       <input type="number" id="start" value="1" min="1">
-      <span class="hint">to skip the cover and the table of contents</span>
+      <span class="hint" data-t="startHint">to skip the cover and the table of contents</span>
     </div>
     <div class="option">
-      <b>From a folder</b>
-      <button id="browse">Choose a PDF&hellip;</button>
+      <b data-t="fromFolder">From a folder</b>
+      <button id="browse" data-t="choosePdf">Choose a PDF&hellip;</button>
       <input type="file" id="file" accept=".pdf,application/pdf">
-      <span class="hint">or drag the PDF onto this box</span>
+      <span class="hint" data-t="dragHint">or drag the PDF onto this box</span>
     </div>
     <div class="option">
-      <b>From its path</b>
+      <b data-t="fromPath">From its path</b>
       <input type="text" id="path" placeholder="C:\\Users\\...\\book.pdf">
-      <button id="add-path">Add</button>
+      <button id="add-path" data-t="add">Add</button>
     </div>
     <div id="message"></div>
   </div>
 </main>
 
+<!-- signature, the same as the footer of dravvt.com: the green wave, the
+     name and the year, small in the bottom corner -->
+<footer class="brand">
+  <a href="https://dravvt.com" target="_blank" rel="noopener">
+    <svg viewBox="0 0 40 30" aria-hidden="true"><path d="M 4 15 Q 12 4 20 15 Q 28 26 36 15"></path></svg>
+    <span>dravvt</span>
+  </a>
+  <span>·</span>
+  <span id="year"></span>
+</footer>
+
 <!-- the folder icon, copied into each card -->
 <template id="folder">@ICON:folder@</template>
 <template id="trash">@ICON:trash-2@</template>
 
+<!-- the interface in the chosen or the Windows language (I18N at the top of
+     this file). @SYSLANG@ is filled in by the server on every request -->
+<script>var SYSTEM_LANG = "@SYSLANG@";</script>
+<script>@I18N@</script>
 <script>
 "use strict";
+// the page itself is in the language of its interface
+document.documentElement.lang = UI_LANG;
+// the book pages follow whatever the library settled on
+rememberLang(UI_LANG);
+// the year of the signature at the bottom, never out of date
+document.getElementById("year").textContent = new Date().getFullYear();
+
+// EN · DE · ES in the corner: another language for the whole interface
+(function () {
+  var box = document.getElementById("languages");
+  ["en", "de", "es"].forEach(function (code) {
+    var b = document.createElement("button");
+    b.textContent = code.toUpperCase();
+    b.className = code === UI_LANG ? "on" : "";
+    b.onclick = function () { rememberLang(code, true); location.reload(); };
+    box.appendChild(b);
+  });
+})();
 
 var FOLDER = document.getElementById("folder").innerHTML;
 var TRASH = document.getElementById("trash").innerHTML;
-var LANGUAGES = { en: "English", de: "German" };
+// var LANGUAGES = { en: "English", de: "German" };
+// the name of a book's language, in the language of the interface
+function languageName(code) { return tr("lang_" + code) === "lang_" + code ? code : tr("lang_" + code); }
 var polling = null;
 
 // the folder name is the file name, underscores and all
@@ -823,7 +1066,7 @@ function card(tag, name, cls, meta, lang) {
   if (cls !== "busy") {
     var del = document.createElement("button");
     del.className = "del";
-    del.title = "delete this book";
+    del.title = tr("deleteBook");
     del.innerHTML = TRASH;
     // the href is read at click time: it is set on the card after this
     del.onclick = function (e) { remove(name, e, el.getAttribute("href")); };
@@ -837,7 +1080,7 @@ function card(tag, name, cls, meta, lang) {
 function remove(name, e, url) {
   e.preventDefault();
   e.stopPropagation();
-  if (!confirm("Delete “" + pretty(name) + "”? It is removed from this computer.")) return;
+  if (!confirm(tr("confirmDelete", { name: pretty(name) }))) return;
   fetch("/delete", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -845,7 +1088,7 @@ function remove(name, e, url) {
   })
     .then(function (r) {
       return r.json().then(function (body) {
-        if (!r.ok) throw new Error(body.error || "the server answered " + r.status);
+        if (!r.ok) throw new Error(trError(body, r.status));
         // and the bookmark goes with it
         if (url) { try { localStorage.removeItem("reader:" + url); } catch (err) {} }
         refresh();
@@ -870,7 +1113,7 @@ function draw(data) {
   document.getElementById("count").textContent = "(" + data.books.length + ")";
   data.books.forEach(function (b) {
     var mark = bookmark(b.url);
-    var el = card("a", b.name, "", mark ? "paragraph " + mark : "not started", b.lang);
+    var el = card("a", b.name, "", mark ? tr("paragraph", { n: mark }) : tr("notStarted"), b.lang);
     el.href = b.url;
     shelf.appendChild(el);
   });
@@ -878,12 +1121,12 @@ function draw(data) {
     var status = data.jobs[name];
     var failed = status !== "building";
     shelf.appendChild(card("div", name, failed ? "failed" : "busy",
-                           failed ? status : "preparing\\u2026 this takes a few minutes"));
+                           failed ? status : tr("preparing")));
   });
   if (!shelf.children.length) {
     var p = document.createElement("p");
     p.className = "empty";
-    p.textContent = "No books yet. Add your first one below.";
+    p.textContent = tr("empty");
     shelf.appendChild(p);
   }
   // without a console, this is the only place a voice download shows up
@@ -891,8 +1134,9 @@ function draw(data) {
   var downloading = data.download && data.download.language;
   d.classList.toggle("on", !!downloading);
   if (downloading) {
-    d.textContent = "Downloading the " + (LANGUAGES[data.download.language] || data.download.language) +
-      " voice… " + (data.download.percent || 0) + " % (only the first time)";
+    d.textContent = tr("downloadingVoice", {
+      language: languageName(data.download.language), p: data.download.percent || 0
+    });
   }
   // keep asking only while something is being prepared or downloaded
   var busy = downloading || Object.keys(data.jobs).some(function (k) { return data.jobs[k] === "building"; });
@@ -912,8 +1156,8 @@ function say(text, kind) {
 
 function answered(r) {
   return r.json().then(function (body) {
-    if (!r.ok) throw new Error(body.error || "the server answered " + r.status);
-    say("\\u201c" + pretty(body.name) + "\\u201d is being prepared. It will show up above when it is ready.", "good");
+    if (!r.ok) throw new Error(trError(body, r.status));
+    say(tr("beingPrepared", { name: pretty(body.name) }), "good");
     // the new book should be seen arriving, so a folded shelf opens
     fold(true);
     refresh();
@@ -926,8 +1170,8 @@ function startPage() {
 
 function upload(file) {
   if (!file) return;
-  if (!/\\.pdf$/i.test(file.name)) { say("That is not a PDF.", "bad"); return; }
-  say("Uploading " + file.name + "\\u2026");
+  if (!/\\.pdf$/i.test(file.name)) { say(tr("notPdf"), "bad"); return; }
+  say(tr("uploading", { name: file.name }));
   var url = "/upload?name=" + encodeURIComponent(file.name) + "&start=" + startPage();
   fetch(url, { method: "POST", body: file })
     .then(answered)
@@ -944,7 +1188,7 @@ document.getElementById("file").onchange = function () {
 
 function addPath() {
   var path = document.getElementById("path").value.trim();
-  if (!path) { say("Paste the path to the PDF first.", "bad"); return; }
+  if (!path) { say(tr("pastePath"), "bad"); return; }
   fetch("/add", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -979,5 +1223,5 @@ refresh();
 </html>
 """
 
-TEMPLATE = with_icons(TEMPLATE)
-SHELF = with_icons(SHELF)
+TEMPLATE = with_i18n(with_icons(TEMPLATE))
+SHELF = with_i18n(with_icons(SHELF))
