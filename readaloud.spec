@@ -9,7 +9,18 @@
 # faster, since nothing has to be unpacked on every launch). Zip that folder
 # to publish it. The voices are not bundled: server.py downloads each one the
 # first time a book in its language needs it, into %LOCALAPPDATA%\ReadAloud.
+import sys
+
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
+
+# pystray picks its tray backend at run time, so the one for this system is
+# not found by following the imports. Linux: X11 or AppIndicator, whichever
+# the desktop has (the release workflow builds both systems from this file)
+TRAY = (
+    ['pystray._win32'] if sys.platform == 'win32'
+    else ['pystray._darwin'] if sys.platform == 'darwin'
+    else ['pystray._xorg', 'pystray._appindicator']
+)
 
 a = Analysis(
     ['server.py'],
@@ -22,7 +33,8 @@ a = Analysis(
     + [('assets/readaloud.png', 'assets')],
     # pystray picks its backend at run time, so the Windows one is not found
     # by following the imports
-    hiddenimports=['piper.espeakbridge', 'pystray._win32'],
+    # hiddenimports=['piper.espeakbridge', 'pystray._win32'],
+    hiddenimports=['piper.espeakbridge'] + TRAY,
     # the personal translation add-on never goes into the published program,
     # even when built from a folder that has translate.py
     excludes=['translate'],

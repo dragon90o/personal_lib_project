@@ -1,0 +1,115 @@
+name: Release
+
+# One tag builds both systems, so Windows and Linux never drift apart:
+#
+#     git tag v1.2.0
+#     git push origin v1.2.0
+#
+# Windows: the .msix for the Microsoft Store (uploaded by hand to Partner
+# Center, which signs it). Linux: a single-file .AppImage. Both go to one
+# GitHub Release, which is only created when BOTH builds succeeded: nothing
+# half-published. "Run workflow" by hand builds them too, for testing, and
+# leaves them as downloadable artifacts without making a Release.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version for a test build (e.g. 1.2.0)'
+        required: true
+        default: '0.0.1'
+
+permissions:
+  contents: write
+
+env:
+  PYTHON: '3.12'
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      short: ${{ steps.v.outputs.short }}
+      msix: ${{ steps.v.outputs.msix }}
+    steps:
+      - id: v
+        # v1.2.0 -> 1.2.0, and 1.2.0.0 for the Store (it wants four numbers)
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then v="${GITHUB_REF_NAME#v}"; else v="${{ inputs.version }}"; fi
+          echo "short=$v" >> "$GITHUB_OUTPUT"
+          echo "msix=$v.0" >> "$GITHUB_OUTPUT"
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON }}
+      - run: pip install -r requirements.txt pyinstaller
+      - run: pyinstaller readaloud.spec --noconfirm --clean
+      - name: Pack the .msix
+        shell: pwsh
+        run: |
+          $pkg = "build-msix"
+          Copy-Item -Recurse packaging/msix $pkg
+          Copy-Item -Recurse dist/ReadAloud "$pkg/ReadAloud"
+          (Get-Content "$pkg/AppxManifest.xml") -replace '@VERSION@', '${{ needs.version.outputs.msix }}' |
+            Set-Content "$pkg/AppxManifest.xml" -Encoding utf8
+          # the newest Windows SDK on the runner
+          $makeappx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\makeappx.exe" |
+            Sort-Object FullName | Select-Object -Last 1
+          & $makeappx.FullName pack /d $pkg /p "ReadAloudPDFLibrary_${{ needs.version.outputs.msix }}_x64.msix" /o
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: ReadAloudPDFLibrary_*.msix
+
+  linux:
+    needs: version
+    # the oldest supported Ubuntu: an AppImage built here runs on newer systems
+    # too, not the other way round (glibc)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON }}
+      - run: pip install -r requirements.txt pyinstaller
+      - run: pyinstaller readaloud.spec --noconfirm --clean
+      - name: Pack the .AppImage
+        run: |
+          app=AppDir
+          mkdir -p "$app/usr/lib"
+          cp -r dist/ReadAloud "$app/usr/lib/readaloud"
+          cp packaging/linux/AppRun "$app/AppRun" && chmod +x "$app/AppRun"
+          cp packaging/linux/readaloud.desktop "$app/readaloud.desktop"
+          cp assets/readaloud.png "$app/readaloud.png"
+          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          # extract-and-run: the runner has no FUSE to mount it
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run \
+            "$app" "ReadAloud-${{ needs.version.outputs.short }}-x86_64.AppImage"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: ReadAloud-*.AppImage
+
+  release:
+    # only from a tag, and only when both builds above succeeded
+    if: github.event_name == 'push'
+    needs: [version, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: ReadAloud ${{ needs.version.outputs.short }}
+          files: out/*
+          generate_release_notes: true

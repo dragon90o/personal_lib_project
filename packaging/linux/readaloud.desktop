@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ReadAloud PDF Library
+Comment=A local library for your PDF books that reads them aloud
+Exec=ReadAloud
+Icon=readaloud
+Categories=Office;Education;
+Terminal=false

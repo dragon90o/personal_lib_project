@@ -1,0 +1,5 @@
+#!/bin/sh
+# Entry point of the AppImage: runs the PyInstaller build that the release
+# workflow puts in usr/lib/readaloud. $APPDIR is set by the AppImage runtime.
+HERE="${APPDIR:-$(dirname "$(readlink -f "$0")")}"
+exec "$HERE/usr/lib/readaloud/ReadAloud" "$@"

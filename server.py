@@ -630,7 +630,29 @@ def tray(server, url):
         pystray.MenuItem(words["open"], lambda *_: webbrowser.open(url), default=True),
         pystray.MenuItem(words["quit"], quit_),
     )
-    pystray.Icon(APP_NAME, Image.open(resource("assets", "readaloud.png")), APP_NAME, menu).run()
+    # pystray.Icon(APP_NAME, Image.open(resource("assets", "readaloud.png")), APP_NAME, menu).run()
+    try:
+        pystray.Icon(APP_NAME, Image.open(resource("assets", "readaloud.png")), APP_NAME, menu).run()
+    except Exception as e:
+        # some Linux desktops (GNOME without the AppIndicator extension, a
+        # Wayland session with no X) have nowhere to put the icon. The reader
+        # works the same without it: keep serving until the process is ended
+        print("no tray icon here (%s); the library stays at %s" % (e, url))
+        threading.Event().wait()
+
+
+def data_home():
+    """Where each system keeps the data of a user's programs.
+
+    Windows %LOCALAPPDATA%, macOS ~/Library/Application Support, Linux
+    $XDG_DATA_HOME or ~/.local/share. Before the Linux build it fell back to
+    the home folder itself, which left a ReadAloud folder lying in ~.
+    """
+    if sys.platform == "win32" and os.environ.get("LOCALAPPDATA"):
+        return os.environ["LOCALAPPDATA"]
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Application Support")
+    return os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
 
 
 def main():
@@ -638,9 +660,10 @@ def main():
     if frozen():
         # everything below (books/, the voices, the static files the server
         # hands out) is relative, so moving into the data folder is enough
-        data = os.path.join(
-            os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), APP_NAME
-        )
+        # data = os.path.join(
+        #     os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), APP_NAME
+        # )
+        data = os.path.join(data_home(), APP_NAME)
         os.makedirs(data, exist_ok=True)
         os.chdir(data)
         # no console: what would have been printed goes to a log in the same
@@ -668,8 +691,16 @@ def main():
     # .desktop entry of the default browser, and some of them (Mullvad, for
     # one) wrap their Exec in a sh -c that breaks when it is re-split. There
     # the printed URL has to do; on Windows and macOS it simply opens.
-    if sys.platform in ("win32", "darwin"):
-        webbrowser.open(url)
+    # if sys.platform in ("win32", "darwin"):
+    #     webbrowser.open(url)
+    # The packaged Linux program (AppImage) has no terminal to print to, so
+    # there it tries anyway: if the browser does not come up, the URL is in
+    # readaloud.log and the tray's "Open library" tries again.
+    if sys.platform in ("win32", "darwin") or frozen():
+        try:
+            webbrowser.open(url)
+        except Exception as e:
+            print("could not open the browser (%s): open %s by hand" % (e, url))
     # the default voice is fetched after the library is already open, not
     # before: the first time that is a 60 MB download, and it looked as if the
     # program had not started. The library does not need a voice; the first
