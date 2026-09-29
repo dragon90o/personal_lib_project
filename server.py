@@ -610,10 +610,14 @@ def tray(server, url):
     It runs on the main thread and blocks until Quit; the server runs on its
     own thread meanwhile. Without pystray (from source, say) it just serves.
     """
+    # except ImportError: on Linux importing pystray already looks for a
+    # display, and with none (or on some desktops) it raises its own error, not
+    # ImportError, which used to close the program right at the start
     try:
         import pystray
         from PIL import Image
-    except ImportError:
+    except Exception as e:
+        print("no tray here (%s); serving without it" % e)
         server.serve_forever()
         return
 
