@@ -20,6 +20,7 @@ comes next lives in the JavaScript of template.py.
 import io
 import json
 import os
+import platform
 import re
 import shutil
 import sys
@@ -27,9 +28,11 @@ import threading
 import urllib.request
 import wave
 import webbrowser
+from html.parser import HTMLParser
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import parse_qs, quote, urlsplit
 
+import lameenc
 from piper import PiperVoice
 
 # import translate
@@ -52,6 +55,10 @@ PORT = 8765
 LIBRARY = "books"
 # where the voice models come from; they weigh 61 MB and are not in the repo
 VOICES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
+# errors and suggestions from the library page go here, and from there by mail
+# to the author. It is this server that sends them, not the page: no CORS
+# between localhost and the site, and no key of any kind in the program
+FEEDBACK_URL = "https://dravvt.com/api/readaloud-feedback"
 # one download of a given voice at a time; see ensure_voice()
 DOWNLOAD_LOCK = threading.Lock()
 # the voice being downloaded right now, for the pages to show: without a
@@ -125,6 +132,15 @@ VOICE_LOCK = threading.Lock()
 # books being prepared from the library page: name -> "building" or the error
 # that stopped it. a finished book leaves this and shows up in library()
 JOBS = {}
+# books being turned into one mp3 from the library page: name -> {"done", "total"}
+# while it runs, or the error that stopped it. a finished export leaves this:
+# the mp3 next to the book's index.html is what /library reports
+EXPORTS = {}
+# the gap between paragraphs in the mp3, as the reader leaves one between them
+PAUSE_MS = 400
+# the mp3 is always called this, inside the book's folder like index.html: with
+# the book's name it would be there twice, and long titles pass Windows' 260
+MP3 = "audio.mp3"
 
 
 def library():
@@ -392,6 +408,100 @@ def synthesize(language, text):
     return data
 
 
+# the tags that never get a closing tag; counting them would leave the parser
+# thinking it is still inside the paragraph
+VOID = {"br", "img", "hr", "wbr", "input"}
+
+
+class Paragraphs(HTMLParser):
+    """The text of every element with data-i, in reading order: exactly what
+    the reader sends to /tts one by one (its textContent)."""
+
+    def __init__(self):
+        super().__init__()
+        self.texts = []
+        self.depth = 0  # above 0 while inside a data-i element
+
+    def handle_starttag(self, tag, attrs):
+        if tag in VOID:
+            return
+        if self.depth:
+            self.depth += 1
+        elif any(k == "data-i" for k, _ in attrs):
+            self.depth = 1
+            self.texts.append("")
+
+    def handle_endtag(self, tag):
+        if self.depth and tag not in VOID:
+            self.depth -= 1
+
+    def handle_data(self, data):
+        if self.depth:
+            self.texts[-1] += data
+
+
+def paragraphs(name):
+    """The book's paragraphs, from its own html: the PDF may be long gone."""
+    with open(os.path.join(LIBRARY, name, "index.html"), encoding="utf-8") as f:
+        parser = Paragraphs()
+        parser.feed(f.read())
+    # return [t.strip() for t in parser.texts if t.strip()]
+    # the browser drops NUL characters while parsing the html (some PDFs carry
+    # them), so textContent never has them; piper refuses a text that does
+    texts = [t.replace("\x00", "").strip() for t in parser.texts]
+    return [t for t in texts if t]
+
+
+def pcm(voice, text):
+    """The raw samples for this text, without the wav header lameenc does not
+    want. Not through synthesize(): a whole book would flood CACHE."""
+    memory = io.BytesIO()
+    with wave.open(memory, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(voice.config.sample_rate)
+        voice.synthesize_wav(text, w, set_wav_format=False)
+    memory.seek(0)
+    with wave.open(memory, "rb") as r:
+        return r.readframes(r.getnframes())
+
+
+def export(name):
+    """Read the whole book into books/<name>/audio.mp3, in the background.
+
+    It is written to .part and renamed at the end, so a half-done mp3 is never
+    offered. One paragraph at a time holds VOICE_LOCK, so reading a book while
+    another exports still works, just slower.
+    """
+    # out = os.path.join(LIBRARY, name, name + ".mp3")
+    out = os.path.join(LIBRARY, name, MP3)
+    try:
+        texts = paragraphs(name)
+        with VOICE_LOCK:
+            voice = voice_for(language_of(os.path.join(LIBRARY, name, "index.html")))
+        rate = voice.config.sample_rate
+        encoder = lameenc.Encoder()
+        encoder.set_in_sample_rate(rate)
+        encoder.set_channels(1)
+        encoder.set_bit_rate(64)  # it is a voice; 64 kbps is plenty
+        encoder.set_quality(2)
+        pause = bytes(2 * rate * PAUSE_MS // 1000)
+        print("exporting %s to mp3 (%d paragraphs) ..." % (name, len(texts)))
+        with open(out + ".part", "wb") as f:
+            for i, text in enumerate(texts):
+                with VOICE_LOCK:
+                    audio = pcm(voice, text)
+                f.write(encoder.encode(audio + pause))
+                EXPORTS[name] = {"done": i + 1, "total": len(texts)}
+            f.write(encoder.flush())
+        os.replace(out + ".part", out)
+        EXPORTS.pop(name, None)
+        print("  %s.mp3 ready" % name)
+    except Exception as e:
+        print("  exporting %s failed: %s" % (name, e))
+        EXPORTS[name] = "failed: %s" % e
+
+
 class Reader(SimpleHTTPRequestHandler):
     """Serves the library and the book folders, and answers the POSTs.
 
@@ -438,10 +548,22 @@ class Reader(SimpleHTTPRequestHandler):
                     "lang": language_of(
                         os.path.join(LIBRARY, name, "index.html")
                     ),
+                    # whether the book already has its mp3 next to the index.html
+                    # "mp3": os.path.isfile(os.path.join(LIBRARY, name, name + ".mp3")),
+                    "mp3": os.path.isfile(os.path.join(LIBRARY, name, MP3)),
                 }
                 for name in names
             ]
-            self.json(200, {"books": books, "jobs": JOBS, "download": DOWNLOAD})
+            # and the exports under way, for their progress. A .part with no
+            # export behind it is one the program was closed in the middle of:
+            # EXPORTS did not survive, so without this the card would say nothing
+            exports = dict(EXPORTS)
+            for name in names:
+                part = os.path.join(LIBRARY, name, MP3 + ".part")
+                if name not in exports and os.path.isfile(part):
+                    exports[name] = "interrupted"
+            # self.json(200, {"books": books, "jobs": JOBS, "download": DOWNLOAD})
+            self.json(200, {"books": books, "jobs": JOBS, "download": DOWNLOAD, "exports": exports})
         elif path == "/favicon.ico":
             # the browser asks for it by itself; the png is what it gets
             try:
@@ -449,6 +571,8 @@ class Reader(SimpleHTTPRequestHandler):
                     self.reply(200, f.read(), "image/png")
             except OSError:
                 self.send_error(404)
+        elif path.endswith(".mp3"):
+            self.send_mp3()
         # the optional translation add-on, see translate.py
         elif translate.ENABLED and path == "/translate.js":
             translate.serve_script(self)
@@ -456,6 +580,56 @@ class Reader(SimpleHTTPRequestHandler):
             pass
         else:
             super().do_GET()
+
+    def send_mp3(self):
+        """An mp3 from Audios, in pieces when the player asks for them.
+
+        SimpleHTTPRequestHandler always sends the whole file and ignores the
+        Range header, and without it the browser does not let the bar be moved.
+        Only files inside the library, found the same way as every other file.
+        """
+        file = self.translate_path(self.path)
+        if (not os.path.realpath(file).startswith(os.path.realpath(LIBRARY) + os.sep)
+                or not os.path.isfile(file)):
+            self.send_error(404)
+            return
+        size = os.path.getsize(file)
+        start, end = 0, size - 1
+        # bytes=START-END, bytes=START- (to the end) or bytes=-N (the last N)
+        found = re.match(r"bytes=(\d*)-(\d*)$", self.headers.get("Range", ""))
+        if found and (found.group(1) or found.group(2)):
+            if found.group(1):
+                start = int(found.group(1))
+                if found.group(2):
+                    end = min(int(found.group(2)), size - 1)
+            else:
+                start = max(0, size - int(found.group(2)))
+            if start > end:
+                self.send_response(416)
+                self.send_header("Content-Range", "bytes */%d" % size)
+                self.end_headers()
+                return
+            self.send_response(206)
+            self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, size))
+        else:
+            self.send_response(200)
+        self.send_header("Content-Type", "audio/mpeg")
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(end - start + 1))
+        self.end_headers()
+        try:
+            with open(file, "rb") as f:
+                f.seek(start)
+                left = end - start + 1
+                while left > 0:
+                    chunk = f.read(min(left, 1 << 16))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+        except ConnectionError:
+            # the player moved on to another piece and closed this one
+            pass
 
     def do_POST(self):
         parts = urlsplit(self.path)
@@ -468,6 +642,12 @@ class Reader(SimpleHTTPRequestHandler):
             self.add()
         elif parts.path == "/delete":
             self.delete()
+        elif parts.path == "/export":
+            self.export_book()
+        elif parts.path == "/delete-mp3":
+            self.delete_mp3()
+        elif parts.path == "/feedback":
+            self.feedback()
         elif translate.ENABLED and parts.path == "/translate":
             translate.handle_post(self, query)
         else:
@@ -483,13 +663,96 @@ class Reader(SimpleHTTPRequestHandler):
             # only names that are actually on the shelf, never a path: this
             # deletes folders, so nothing from the request gets near rmtree
             known = set(library()) | set(JOBS)
-            if name not in known or JOBS.get(name) == "building":
+            # if name not in known or JOBS.get(name) == "building":
+            # nor while it is being exported: rmtree would pull the folder from under the mp3
+            if name not in known or JOBS.get(name) == "building" or isinstance(EXPORTS.get(name), dict):
                 raise UserError("no_book", "there is no such book to delete")
             shutil.rmtree(os.path.join(LIBRARY, name), ignore_errors=True)
             JOBS.pop(name, None)
             print("deleted %s" % name)
         except ValueError as e:
             self.json(400, error_body(e))
+            return
+        self.json(200, {"name": name})
+
+    def export_book(self):
+        """Start the mp3 of a book on the shelf; the page follows it in /library."""
+        length = int(self.headers.get("Content-Length", 0))
+        try:
+            name = str(json.loads(self.rfile.read(length) or b"{}").get("name", ""))
+            # only names on the shelf, never a path, as in delete()
+            if name not in library():
+                raise UserError("no_book", "there is no such book")
+            if isinstance(EXPORTS.get(name), dict):
+                raise UserError("exporting", "“%s” is already being exported" % name, name)
+            EXPORTS[name] = {"done": 0, "total": 0}
+            threading.Thread(target=export, args=(name,), daemon=True).start()
+        except ValueError as e:
+            self.json(400, error_body(e))
+            return
+        self.json(200, {"name": name})
+
+    def feedback(self):
+        """An error or a suggestion written on the library page, passed on to
+        dravvt.com, which mails it. Besides what the person wrote, only the
+        system and the interface language go along: nothing about the books."""
+        length = int(self.headers.get("Content-Length", 0))
+        try:
+            sent = json.loads(self.rfile.read(length) or b"{}")
+            body = json.dumps({
+                "message": str(sent.get("message", "")),
+                "email": str(sent.get("email", "")),
+                # the honeypot, checked by the site
+                "website": str(sent.get("website", "")),
+                "lang": str(sent.get("lang", "")),
+                "system": "%s %s" % (platform.system(), platform.release()),
+                "packaged": frozen(),
+            }).encode("utf-8")
+            request = urllib.request.Request(
+                FEEDBACK_URL, data=body, method="POST",
+                headers={"Content-Type": "application/json", "User-Agent": "ReadAloud"},
+            )
+            with urllib.request.urlopen(request, timeout=20) as r:
+                r.read()
+        except urllib.error.HTTPError as e:
+            # the site's own answer: invalid, rate_limited or send_failed
+            try:
+                code = json.loads(e.read()).get("error", "")
+            except ValueError:
+                code = ""
+            self.json(e.code, {"error": "HTTP %d" % e.code, "code": "feedback_" + (code or "send_failed")})
+            return
+        except (OSError, ValueError) as e:
+            # no connection, most likely: the page says so
+            self.json(502, {"error": str(e), "code": "feedback_offline"})
+            return
+        self.json(200, {"ok": True})
+
+    def delete_mp3(self):
+        """Remove a book's mp3, so it can be made again. Only the mp3 and a
+        leftover .part: the book itself stays on the shelf."""
+        length = int(self.headers.get("Content-Length", 0))
+        try:
+            name = str(json.loads(self.rfile.read(length) or b"{}").get("name", ""))
+            # only names on the shelf, never a path, as in delete()
+            if name not in library():
+                raise UserError("no_book", "there is no such book")
+            if isinstance(EXPORTS.get(name), dict):
+                raise UserError("exporting", "“%s” is already being exported" % name, name)
+            for f in (MP3, MP3 + ".part"):
+                try:
+                    os.remove(os.path.join(LIBRARY, name, f))
+                except FileNotFoundError:
+                    pass
+            # a failure shown on the card goes with it
+            EXPORTS.pop(name, None)
+            print("deleted the mp3 of %s" % name)
+        except ValueError as e:
+            self.json(400, error_body(e))
+            return
+        except OSError as e:
+            # Windows refuses while the file is still being sent to the player
+            self.json(500, error_body(e))
             return
         self.json(200, {"name": name})
 

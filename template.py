@@ -61,7 +61,28 @@ var UI_TEXT = {
     noAudio: "no audio: start server.py ({message})",
     search: "search the book (Ctrl+F)", searchPlaceholder: "Search the book…",
     noMatches: "nothing found", matches: "{n} of {total}", pageShort: "p. {n}",
-    prevMatch: "previous match (Shift+Enter)", nextMatch: "next match (Enter)"
+    prevMatch: "previous match (Shift+Enter)", nextMatch: "next match (Enter)",
+    exportMp3: "Make MP3", exportMp3Title: "read the whole book into one MP3 file",
+    exporting: "MP3 {p} %", downloadMp3: "Download MP3",
+    mp3Failed: "Could not make the MP3", mp3Interrupted: "The MP3 was interrupted",
+    retry: "Retry", err_exporting: "“{name}” is already being exported",
+    audios: "Audios", saveMp3: "Save", deleteMp3: "delete the MP3",
+    confirmDeleteMp3: "Delete the MP3 of “{name}”? You can make it again.",
+    coffee: "Like ReadAloud? Buy me a coffee ☕", coffeeShort: "Buy me a coffee",
+    coffeeAsk: "Did listening to your PDF help?",
+    coffeeText: "ReadAloud is free. If it helped you, buy me a coffee.",
+    tabBooks: "Books", tabHelp: "Help", filterBooks: "Search a book…",
+    noAudios: "No MP3 yet. Use “Make MP3” on a book.",
+    feedbackTitle: "Errors or suggestions",
+    feedbackPlaceholder: "What went wrong, or what would you change?",
+    feedbackEmail: "Your email, only if you want an answer",
+    feedbackSend: "Send", feedbackSending: "Sending…",
+    feedbackThanks: "Thanks! I read every message.",
+    feedbackShort: "Write a little more first.",
+    err_feedback_invalid: "Check the email address.",
+    err_feedback_rate_limited: "Too many messages in a short time. Try again in an hour.",
+    err_feedback_send_failed: "It could not be sent. Try again later.",
+    err_feedback_offline: "No internet connection: it could not be sent."
   },
   de: {
     toggle: "Bücher ein- oder ausblenden", library: "Bibliothek",
@@ -98,7 +119,28 @@ var UI_TEXT = {
     noAudio: "kein Ton: starte server.py ({message})",
     search: "im Buch suchen (Strg+F)", searchPlaceholder: "Im Buch suchen …",
     noMatches: "nichts gefunden", matches: "{n} von {total}", pageShort: "S. {n}",
-    prevMatch: "vorheriger Treffer (Umschalt+Enter)", nextMatch: "nächster Treffer (Enter)"
+    prevMatch: "vorheriger Treffer (Umschalt+Enter)", nextMatch: "nächster Treffer (Enter)",
+    exportMp3: "MP3 erstellen", exportMp3Title: "das ganze Buch in eine MP3-Datei vorlesen",
+    exporting: "MP3 {p} %", downloadMp3: "MP3 herunterladen",
+    mp3Failed: "Das MP3 konnte nicht erstellt werden", mp3Interrupted: "Das MP3 wurde unterbrochen",
+    retry: "Erneut versuchen", err_exporting: "„{name}“ wird schon exportiert",
+    audios: "Audios", saveMp3: "Speichern", deleteMp3: "das MP3 löschen",
+    confirmDeleteMp3: "Das MP3 von „{name}“ löschen? Du kannst es wieder erstellen.",
+    coffee: "Gefällt dir ReadAloud? Lad mich auf einen Kaffee ein ☕", coffeeShort: "Lad mich auf einen Kaffee ein",
+    coffeeAsk: "Hat es dir geholfen, dein PDF zu hören?",
+    coffeeText: "ReadAloud ist kostenlos. Wenn es dir geholfen hat, lad mich auf einen Kaffee ein.",
+    tabBooks: "Bücher", tabHelp: "Hilfe", filterBooks: "Buch suchen …",
+    noAudios: "Noch kein MP3. Nutze „MP3 erstellen“ bei einem Buch.",
+    feedbackTitle: "Fehler oder Vorschläge",
+    feedbackPlaceholder: "Was ist schiefgelaufen oder was würdest du ändern?",
+    feedbackEmail: "Deine E-Mail, nur wenn du eine Antwort willst",
+    feedbackSend: "Senden", feedbackSending: "Wird gesendet …",
+    feedbackThanks: "Danke! Ich lese jede Nachricht.",
+    feedbackShort: "Schreib zuerst etwas mehr.",
+    err_feedback_invalid: "Prüfe die E-Mail-Adresse.",
+    err_feedback_rate_limited: "Zu viele Nachrichten in kurzer Zeit. Versuch es in einer Stunde wieder.",
+    err_feedback_send_failed: "Konnte nicht gesendet werden. Versuch es später noch einmal.",
+    err_feedback_offline: "Keine Internetverbindung: konnte nicht gesendet werden."
   },
   es: {
     toggle: "mostrar u ocultar los libros", library: "Biblioteca",
@@ -135,7 +177,28 @@ var UI_TEXT = {
     noAudio: "sin audio: inicia server.py ({message})",
     search: "buscar en el libro (Ctrl+F)", searchPlaceholder: "Buscar en el libro…",
     noMatches: "no se encontró nada", matches: "{n} de {total}", pageShort: "p. {n}",
-    prevMatch: "resultado anterior (Mayús+Enter)", nextMatch: "resultado siguiente (Enter)"
+    prevMatch: "resultado anterior (Mayús+Enter)", nextMatch: "resultado siguiente (Enter)",
+    exportMp3: "Crear MP3", exportMp3Title: "leer el libro entero en un archivo MP3",
+    exporting: "MP3 {p} %", downloadMp3: "Descargar MP3",
+    mp3Failed: "No se pudo crear el MP3", mp3Interrupted: "El MP3 se interrumpió",
+    retry: "Reintentar", err_exporting: "“{name}” ya se está exportando",
+    audios: "Audios", saveMp3: "Guardar", deleteMp3: "borrar el MP3",
+    confirmDeleteMp3: "¿Borrar el MP3 de “{name}”? Puedes crearlo otra vez.",
+    coffee: "¿Te sirve ReadAloud? Invítame un café ☕", coffeeShort: "Invítame un café",
+    coffeeAsk: "¿Te sirvió escuchar tu PDF?",
+    coffeeText: "ReadAloud es gratis. Si te ayudó, invítame un café.",
+    tabBooks: "Libros", tabHelp: "Ayuda", filterBooks: "Buscar un libro…",
+    noAudios: "Todavía no hay MP3. Usa «Crear MP3» en un libro.",
+    feedbackTitle: "Errores o sugerencias",
+    feedbackPlaceholder: "¿Qué falló o qué cambiarías?",
+    feedbackEmail: "Tu email, solo si quieres respuesta",
+    feedbackSend: "Enviar", feedbackSending: "Enviando…",
+    feedbackThanks: "¡Gracias! Leo todos los mensajes.",
+    feedbackShort: "Escribe un poco más primero.",
+    err_feedback_invalid: "Revisa el email.",
+    err_feedback_rate_limited: "Demasiados mensajes seguidos. Inténtalo dentro de una hora.",
+    err_feedback_send_failed: "No se pudo enviar. Inténtalo más tarde.",
+    err_feedback_offline: "Sin conexión a internet: no se pudo enviar."
   }
 };
 // Which language: the one chosen in the library (EN · DE · ES, kept in
@@ -995,8 +1058,73 @@ h1 {
   margin: 0 0 .3rem;
 }
 h1 .icon { width: 1.2em; height: 1.2em; color: var(--folder); }
-/* the title folds the shelf away, so the whole page fits on one screen */
-h1 { cursor: pointer; user-select: none; }
+/* the title folds the shelf away, so the whole page fits on one screen
+h1 { cursor: pointer; user-select: none; } */
+/* the tabs: Books, Audios, Help */
+.tabs { display: flex; gap: .2rem; margin: 1.2rem 0 1.5rem; border-bottom: 1px solid var(--border); }
+.tabs button {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  padding: .6rem .9rem;
+  color: var(--muted);
+}
+.tabs button:hover { background: none; color: var(--ink); }
+.tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+.tabs .n { font-size: .8em; }
+.tabs { flex-wrap: wrap; align-items: center; }
+/* the coffee, at the right of the tabs; on a narrow window it drops below */
+.coffee-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  margin-left: auto;
+  padding: .35rem .8rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: .85rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.coffee-btn:hover { background: #00ff0014; }
+.coffee-btn .icon, .coffee-box .icon { width: 16px; height: 16px; flex: none; }
+.tabs .coffee-btn { margin-bottom: .4rem; }
+/* under the audios: the question, a line, and the same button */
+.coffee-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .9rem;
+  margin-top: 1rem;
+  padding: .9rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.coffee-box > .icon { width: 24px; height: 24px; color: var(--accent); }
+.coffee-box .words { flex: 1; min-width: 14rem; display: grid; gap: .15rem; }
+.coffee-box .words span { color: var(--muted); font-size: .9rem; }
+/* the search and "+ Add a book", above the shelf */
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: 0 0 1.2rem; }
+.tools input[type=search] {
+  flex: 1;
+  min-width: 14rem;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .45rem .6rem;
+  font: inherit;
+}
+#add { margin-bottom: 1.2rem; }
+/* hidden wins over the display of .book (flex) or .add (grid), which would
+   otherwise keep the filtered cards and the closed box on screen */
+[hidden] { display: none !important; }
+#message:empty { display: none; }
+#message { margin: 0 0 1rem; }
 h1 .chevron { display: flex; transition: transform .2s; }
 h1 .chevron .icon { color: var(--muted); }
 h1.open .chevron { transform: rotate(90deg); }
@@ -1097,6 +1225,113 @@ a.book:hover { background: var(--card-hover); transform: translateY(-2px); }
 }
 .failed .meta { color: var(--error); }
 .empty { color: var(--muted); }
+/* the MP3 of the whole book, under the name: a button to make it, its
+   progress, the button to download it, or, in red, why it did not work */
+.book .mp3 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .3rem;
+  font-size: .78rem;
+}
+.book .mp3 button {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .2rem .55rem;
+  font-size: .78rem;
+}
+.book .mp3 .icon { width: 14px; height: 14px; fill: none; stroke-width: 2; color: inherit; }
+.book .mp3 .progress { color: var(--accent); font-variant-numeric: tabular-nums; }
+.book .mp3.bad { color: var(--error); }
+.book .mp3 .detail { color: var(--muted); font-size: .7rem; word-break: break-word; }
+/* the MP3s, one row each: the name, then the player, Save and delete */
+.audios {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.audios li { display: grid; gap: .5rem; padding: .8rem 1rem; }
+.audios li + li { border-top: 1px solid var(--border); }
+.audios .title { display: flex; align-items: center; gap: .3rem; font-size: .92rem; }
+.audios .controls { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+/* .audios audio { flex: 1; min-width: 16rem; height: 36px; } */
+/* the player drawn by the page (playerControls): the browser's is white */
+.audios audio { display: none; }
+.audios .player { flex: 1; min-width: 16rem; display: flex; align-items: center; gap: .6rem; }
+.audios .play { width: 2.6rem; justify-content: center; }
+.audios .speed { min-width: 3.8rem; justify-content: center; font-variant-numeric: tabular-nums; }
+.audios .time { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.audios input[type=range] {
+  flex: 1;
+  min-width: 6rem;
+  height: 6px;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--accent) var(--p, 0%), var(--border) var(--p, 0%));
+  cursor: pointer;
+}
+.audios input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.audios input[type=range]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.audios button { display: flex; align-items: center; gap: .3rem; }
+.audios .icon { width: 16px; height: 16px; fill: none; stroke-width: 2; color: inherit; }
+.audios .del-mp3 { padding: .45rem; color: var(--muted); }
+.audios .del-mp3:hover { color: var(--error); }
+/* errors or suggestions, at the bottom, in a box like "Add a book" */
+.feedback {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.2rem;
+  display: grid;
+  gap: .8rem;
+  /* room for the signature fixed in the corner */
+  margin-bottom: 3rem;
+}
+.feedback textarea {
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .5rem .6rem;
+  font: inherit;
+  resize: vertical;
+}
+.feedback input[type=email] {
+  flex: 1;
+  min-width: 14rem;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .45rem .6rem;
+  font: inherit;
+}
+.feedback .trap { position: absolute; left: -9999px; width: 1px; height: 1px; }
+#fb-status { min-height: 1.2em; font-size: .9rem; }
+#fb-status.bad { color: var(--error); }
+#fb-status.good { color: var(--accent); }
+.coffee-line { margin: .8rem 0 0; font-size: .9rem; }
+.coffee-line a { color: var(--accent); text-decoration: none; }
+.coffee-line a:hover { text-decoration: underline; }
 
 .add {
   background: var(--card);
@@ -1159,14 +1394,36 @@ footer.brand path { fill: none; stroke: var(--folder); stroke-width: 8; stroke-l
 <body>
 <main>
   <div id="languages" class="languages"></div>
-  <h1 id="toggle" title="show or hide the books" data-t-title="toggle"><span class="chevron">@ICON:chevron-right@</span>@ICON:library-big@ <span data-t="library">Library</span> <span id="count"></span></h1>
-  <p class="lead" data-t="lead">Click a book to open it. It picks up where you left off.</p>
+  <!-- <h1 id="toggle" title="show or hide the books" data-t-title="toggle"><span class="chevron">@ICON:chevron-right@</span>@ICON:library-big@ <span data-t="library">Library</span> <span id="count"></span></h1> -->
+  <!-- the title no longer folds the shelf: with many books, the tabs and the
+       search below are what keep the page short -->
+  <h1>@ICON:library-big@ <span data-t="library">Library</span></h1>
 
+  <!-- one page, three tabs: switching only hides the others, so an audio
+       keeps playing while you look at the books -->
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="books"><span data-t="tabBooks">Books</span> <span class="n" id="count"></span></button>
+    <button role="tab" data-tab="audios"><span data-t="audios">Audios</span> <span class="n" id="audio-count"></span></button>
+    <button role="tab" data-tab="help" data-t="tabHelp">Help</button>
+    <!-- not a tab: always in sight, and quiet (an outline, no fill) -->
+    <a class="coffee-btn" href="@COFFEE@" target="_blank" rel="noopener">@ICON:coffee@ <span data-t="coffeeShort">Buy me a coffee</span></a>
+  </nav>
+
+  <!-- above the tabs' content: what the page says shows whatever tab is open -->
   <div id="download"></div>
-  <div class="shelf" id="shelf"></div>
+  <div id="message"></div>
 
-  <h2 data-t="addBook">Add a book</h2>
-  <div class="add" id="add">
+  <section class="tab" id="tab-books">
+  <p class="lead" data-t="lead">Click a book to open it. It picks up where you left off.</p>
+  <div class="tools">
+    <input type="search" id="filter" placeholder="Search a book…" data-t-placeholder="filterBooks" autocomplete="off">
+    <button id="add-toggle">+ <span data-t="addBook">Add a book</span></button>
+  </div>
+
+  <!-- <h2 data-t="addBook">Add a book</h2> -->
+  <!-- opened with "+ Add a book", or by itself when the library is empty or a
+       PDF is dragged over the page -->
+  <div class="add" id="add" hidden>
     <div class="option">
       <b data-t="startAt">Start at page</b>
       <input type="number" id="start" value="1" min="1">
@@ -1183,13 +1440,54 @@ footer.brand path { fill: none; stroke: var(--folder); stroke-width: 8; stroke-l
       <input type="text" id="path" placeholder="C:\\Users\\...\\book.pdf">
       <button id="add-path" data-t="add">Add</button>
     </div>
-    <div id="message"></div>
+    <!-- <div id="message"></div>: moved above the tabs -->
   </div>
+
+  <div class="shelf" id="shelf"></div>
+  <p class="empty" id="no-match" hidden data-t="noMatches">nothing found</p>
+  </section>
+
+  <!-- the books that have their MP3, to listen to here or save -->
+  <section class="tab" id="tab-audios" hidden>
+    <p class="empty" id="no-audios" data-t="noAudios">No MP3 yet. Use “Make MP3” on a book.</p>
+    <ul class="audios" id="audio-list"></ul>
+    <!-- right after someone got something out of the program -->
+    <!-- <p class="coffee-line"><a href="@COFFEE@" target="_blank" rel="noopener" data-t="coffee">Like ReadAloud? Buy me a coffee ☕</a></p> -->
+    <!-- the moment people are glad their PDF became audio; only with audios -->
+    <div class="coffee-box" id="coffee-box" hidden>
+      @ICON:coffee@
+      <div class="words">
+        <b data-t="coffeeAsk">Did listening to your PDF help?</b>
+        <span data-t="coffeeText">ReadAloud is free. If it helped you, buy me a coffee.</span>
+      </div>
+      <a class="coffee-btn" href="@COFFEE@" target="_blank" rel="noopener">@ICON:coffee@ <span data-t="coffeeShort">Buy me a coffee</span></a>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-help" hidden>
+  <!-- errors and suggestions: server.py passes them to dravvt.com, which mails
+       them. The email is optional, only to be able to answer -->
+  <h2 data-t="feedbackTitle">Errors or suggestions</h2>
+  <form class="feedback" id="feedback">
+    <textarea id="fb-message" rows="4" maxlength="5000" placeholder="What went wrong, or what would you change?" data-t-placeholder="feedbackPlaceholder"></textarea>
+    <div class="option">
+      <input type="email" id="fb-email" maxlength="200" placeholder="Your email, only if you want an answer" data-t-placeholder="feedbackEmail">
+      <!-- the trap for bots, as in the site's contact form: people never see it -->
+      <input type="text" id="fb-website" class="trap" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <button type="submit" id="fb-send" data-t="feedbackSend">Send</button>
+    </div>
+    <div id="fb-status"></div>
+  </form>
+  <!-- <p class="coffee-line"><a href="@COFFEE@" ...>Like ReadAloud? Buy me a coffee ☕</a></p>
+       too many coffees: here people come to complain or suggest. It stays in the menu -->
+  </section>
 </main>
 
 <!-- signature, the same as the footer of dravvt.com: the green wave, the
      name and the year, small in the bottom corner -->
 <footer class="brand">
+  <!-- <a href="@COFFEE@" target="_blank" rel="noopener" data-t="coffeeShort">Buy me a coffee ☕</a>
+  <span>·</span> : the coffee moved to the menu -->
   <a href="https://dravvt.com" target="_blank" rel="noopener">
     <svg viewBox="0 0 40 30" aria-hidden="true"><path d="M 4 15 Q 12 4 20 15 Q 28 26 36 15"></path></svg>
     <span>dravvt</span>
@@ -1201,6 +1499,7 @@ footer.brand path { fill: none; stroke: var(--folder); stroke-width: 8; stroke-l
 <!-- the folder icon, copied into each card -->
 <template id="folder">@ICON:folder@</template>
 <template id="trash">@ICON:trash-2@</template>
+<template id="download-icon">@ICON:download@</template>
 
 <!-- the interface in the chosen or the Windows language (I18N at the top of
      this file). @SYSLANG@ is filled in by the server on every request -->
@@ -1229,6 +1528,7 @@ document.getElementById("year").textContent = new Date().getFullYear();
 
 var FOLDER = document.getElementById("folder").innerHTML;
 var TRASH = document.getElementById("trash").innerHTML;
+var DOWNLOAD_ICON = document.getElementById("download-icon").innerHTML;
 // var LANGUAGES = { en: "English", de: "German" };
 // the name of a book's language, in the language of the interface
 function languageName(code) { return tr("lang_" + code) === "lang_" + code ? code : tr("lang_" + code); }
@@ -1304,26 +1604,340 @@ function remove(name, e, url) {
     .catch(function (err) { say(err.message, "bad"); });
 }
 
-function fold(open) {
-  document.getElementById("shelf").classList.toggle("folded", !open);
-  document.getElementById("toggle").classList.toggle("open", open);
-  try { localStorage.setItem("library:open", open ? "1" : ""); } catch (e) {}
+// a small button inside a card. The card is a link, so the click must not
+// also open the book
+function cardButton(label, icon, onclick) {
+  var b = document.createElement("button");
+  b.innerHTML = icon || "";
+  b.appendChild(document.createTextNode(label));
+  b.onclick = function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    onclick();
+  };
+  return b;
 }
-document.getElementById("toggle").onclick = function () {
-  fold(document.getElementById("shelf").classList.contains("folded"));
+
+// the MP3 row of a book's card. status is what /library says in "exports":
+// {done, total} while it is being made, "failed: ..." or "interrupted"; with
+// nothing there, the book either has its mp3 or not
+function mp3Row(b, status) {
+  var row = document.createElement("div");
+  row.className = "mp3";
+  var start = function () { exportMp3(b.name); };
+  if (status && typeof status === "object") {
+    var p = status.total ? Math.floor(100 * status.done / status.total) : 0;
+    var s = document.createElement("span");
+    s.className = "progress";
+    s.textContent = tr("exporting", { p: p });
+    row.appendChild(s);
+  } else if (status) {
+    // a failure stays on the card until it is retried: nobody should be left
+    // waiting for an mp3 that is not coming
+    row.className += " bad";
+    var interrupted = status === "interrupted";
+    var t = document.createElement("span");
+    t.textContent = tr(interrupted ? "mp3Interrupted" : "mp3Failed");
+    row.appendChild(t);
+    if (!interrupted) {
+      // the reason as the server gave it, for whoever writes asking about it
+      var d = document.createElement("span");
+      d.className = "detail";
+      d.textContent = status.replace(/^failed: /, "");
+      row.appendChild(d);
+    }
+    row.appendChild(cardButton(tr("retry"), "", start));
+  // } else if (b.mp3) {
+  //   row.appendChild(cardButton(tr("downloadMp3"), DOWNLOAD_ICON, function () { ... }));
+  // a book that has its mp3 shows nothing here: the mp3 is in Audios, below
+  // the shelf (two things on one card was confusing)
+  } else if (b.mp3) {
+    return null;
+  } else {
+    var make = cardButton(tr("exportMp3"), DOWNLOAD_ICON, start);
+    make.title = tr("exportMp3Title");
+    row.appendChild(make);
+  }
+  return row;
+}
+
+function mp3Url(b) { return b.url.replace(/index\\.html$/, "audio.mp3"); }
+
+// the Audios section. The shelf is redrawn every 2 s while something is being
+// made, which would restart a player halfway through, so the list is only
+// rebuilt when the set of mp3s changes
+var audiosShown = null;
+function drawAudios(books) {
+  var key = books.map(function (b) { return b.name; }).join("\\n");
+  if (key === audiosShown) return;
+  audiosShown = key;
+  // document.getElementById("audios").hidden = !books.length;
+  // the tab is always there; empty, it says how to make one
+  document.getElementById("no-audios").hidden = !!books.length;
+  document.getElementById("audio-list").hidden = !books.length;
+  document.getElementById("coffee-box").hidden = !books.length;
+  document.getElementById("audio-count").textContent = books.length ? "(" + books.length + ")" : "";
+  var list = document.getElementById("audio-list");
+  list.textContent = "";
+  books.forEach(function (b) {
+    var li = document.createElement("li");
+    var title = document.createElement("div");
+    title.className = "title";
+    var l = document.createElement("span");
+    l.className = "lang";
+    l.textContent = (b.lang || "").toUpperCase();
+    title.appendChild(l);
+    title.appendChild(document.createTextNode(pretty(b.name)));
+    li.appendChild(title);
+
+    var controls = document.createElement("div");
+    controls.className = "controls";
+    // var player = document.createElement("audio");
+    // player.controls = true;
+    // player.preload = "none";
+    // the browser's own player is white and barely takes colours, so it is
+    // hidden and drawn here, like the rest of the page. Only the length is
+    // read beforehand (a few bytes, now that the server sends pieces)
+    var player = document.createElement("audio");
+    player.preload = "metadata";
+    player.src = mp3Url(b);
+    controls.appendChild(player);
+    controls.appendChild(playerControls(player));
+
+    // saved under the book's name, not audio.mp3
+    var save = document.createElement("button");
+    save.innerHTML = DOWNLOAD_ICON;
+    save.appendChild(document.createTextNode(tr("saveMp3")));
+    save.onclick = function () {
+      var a = document.createElement("a");
+      a.href = mp3Url(b);
+      a.download = pretty(b.name) + ".mp3";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    };
+    controls.appendChild(save);
+
+    var del = document.createElement("button");
+    del.className = "del-mp3";
+    del.title = tr("deleteMp3");
+    del.innerHTML = TRASH;
+    del.onclick = function () {
+      if (!confirm(tr("confirmDeleteMp3", { name: pretty(b.name) }))) return;
+      // let go of the file first: Windows will not delete it while it is
+      // still being sent to the player
+      player.pause();
+      player.removeAttribute("src");
+      player.load();
+      deleteMp3(b.name);
+    };
+    controls.appendChild(del);
+    li.appendChild(controls);
+    list.appendChild(li);
+  });
+}
+
+// 3:13, or 1:02:05 for the long books
+function clock(s) {
+  if (!isFinite(s)) return "0:00";
+  s = Math.floor(s);
+  var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+  return (h ? h + ":" + (m < 10 ? "0" : "") + m : m) + ":" + (x < 10 ? "0" : "") + x;
+}
+
+var SPEEDS = [1, 1.25, 1.5, 2];
+
+// play/pause, the time, the green bar, the length and the speed of one mp3
+function playerControls(player) {
+  var box = document.createElement("div");
+  box.className = "player";
+  var play = document.createElement("button");
+  play.className = "play";
+  play.textContent = "\\u25B6";
+  var now = document.createElement("span");
+  now.className = "time";
+  now.textContent = "0:00";
+  // 0 to 1000 rather than seconds: the length is not known until it loads
+  var bar = document.createElement("input");
+  bar.type = "range";
+  bar.min = 0;
+  bar.max = 1000;
+  bar.value = 0;
+  var total = document.createElement("span");
+  total.className = "time";
+  total.textContent = "0:00";
+  var speed = document.createElement("button");
+  speed.className = "speed";
+  speed.textContent = "1.0\\u00D7";
+  [play, now, bar, total, speed].forEach(function (el) { box.appendChild(el); });
+
+  // the bar is green up to where it is, through --p in the css
+  var dragging = false;
+  function paint() {
+    var d = player.duration;
+    if (!dragging) bar.value = d ? Math.round(1000 * player.currentTime / d) : 0;
+    bar.style.setProperty("--p", bar.value / 10 + "%");
+    if (!dragging) now.textContent = clock(player.currentTime);
+    total.textContent = clock(d);
+  }
+  player.addEventListener("timeupdate", paint);
+  player.addEventListener("loadedmetadata", paint);
+  player.addEventListener("durationchange", paint);
+  player.addEventListener("play", function () {
+    play.textContent = "\\u275A\\u275A";
+    // one at a time: starting this one pauses whichever was playing
+    Array.prototype.forEach.call(document.querySelectorAll(".audios audio"), function (a) {
+      if (a !== player) a.pause();
+    });
+  });
+  player.addEventListener("pause", function () { play.textContent = "\\u25B6"; });
+  player.addEventListener("ended", function () { play.textContent = "\\u25B6"; });
+
+  play.onclick = function () {
+    if (player.paused) player.play(); else player.pause();
+  };
+  // while dragging only the bar and the time move; the jump is on release
+  bar.oninput = function () {
+    dragging = true;
+    bar.style.setProperty("--p", bar.value / 10 + "%");
+    if (player.duration) now.textContent = clock(bar.value / 1000 * player.duration);
+  };
+  bar.onchange = function () {
+    dragging = false;
+    if (player.duration) player.currentTime = bar.value / 1000 * player.duration;
+    paint();
+  };
+  speed.onclick = function () {
+    var next = SPEEDS[(SPEEDS.indexOf(player.playbackRate) + 1) % SPEEDS.length];
+    player.playbackRate = next;
+    speed.textContent = (next % 1 ? next : next.toFixed(1)) + "\\u00D7";
+  };
+  return box;
+}
+
+function deleteMp3(name) {
+  fetch("/delete-mp3", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: name })
+  })
+    .then(function (r) {
+      return r.json().then(function (body) {
+        if (!r.ok) throw new Error(trError(body, r.status));
+        refresh();
+      });
+    })
+    .catch(function (err) { say(err.message, "bad"); });
+}
+
+// errors or suggestions: the server passes them on to dravvt.com
+document.getElementById("feedback").onsubmit = function (e) {
+  e.preventDefault();
+  var message = document.getElementById("fb-message");
+  var send = document.getElementById("fb-send");
+  var status = document.getElementById("fb-status");
+  var show = function (text, kind) { status.textContent = text; status.className = kind || ""; };
+  if (message.value.trim().length < 5) { show(tr("feedbackShort"), "bad"); return; }
+  send.disabled = true;
+  show(tr("feedbackSending"));
+  fetch("/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: message.value,
+      email: document.getElementById("fb-email").value,
+      website: document.getElementById("fb-website").value,
+      lang: UI_LANG
+    })
+  })
+    .then(function (r) {
+      return r.json().then(function (body) {
+        if (!r.ok) throw new Error(trError(body, r.status));
+        show(tr("feedbackThanks"), "good");
+        message.value = "";
+      });
+    })
+    .catch(function (err) { show(err.message, "bad"); })
+    .then(function () { send.disabled = false; });
 };
-try { fold(!!localStorage.getItem("library:open")); } catch (e) { fold(false); }
+
+function exportMp3(name) {
+  fetch("/export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: name })
+  })
+    .then(function (r) {
+      return r.json().then(function (body) {
+        if (!r.ok) throw new Error(trError(body, r.status));
+        refresh();
+      });
+    })
+    .catch(function (err) { say(err.message, "bad"); });
+}
+
+// function fold(open) {
+//   document.getElementById("shelf").classList.toggle("folded", !open);
+//   document.getElementById("toggle").classList.toggle("open", open);
+//   try { localStorage.setItem("library:open", open ? "1" : ""); } catch (e) {}
+// }
+// document.getElementById("toggle").onclick = ...; fold(!!localStorage.getItem("library:open"));
+// the shelf no longer folds: the tabs and the search took its place
+
+// Books · Audios · Help. The last one open is remembered
+var TABS = ["books", "audios", "help"];
+function showTab(name) {
+  TABS.forEach(function (t) {
+    document.getElementById("tab-" + t).hidden = t !== name;
+    var b = document.querySelector('.tabs [data-tab="' + t + '"]');
+    b.classList.toggle("on", t === name);
+    b.setAttribute("aria-selected", t === name ? "true" : "false");
+  });
+  try { localStorage.setItem("library:tab", name); } catch (e) {}
+}
+Array.prototype.forEach.call(document.querySelectorAll(".tabs [data-tab]"), function (b) {
+  b.onclick = function () { showTab(b.getAttribute("data-tab")); };
+});
+(function () {
+  var saved = null;
+  try { saved = localStorage.getItem("library:tab"); } catch (e) {}
+  showTab(TABS.indexOf(saved) >= 0 ? saved : "books");
+})();
+
+// "+ Add a book" opens and closes the box
+var addBox = document.getElementById("add");
+document.getElementById("add-toggle").onclick = function () { addBox.hidden = !addBox.hidden; };
+
+// the search: by name, ignoring case and accents, as you type
+function plain(s) {
+  return s.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+}
+function applyFilter() {
+  var q = plain(document.getElementById("filter").value.trim());
+  var cards = document.querySelectorAll("#shelf .book");
+  var shown = 0;
+  Array.prototype.forEach.call(cards, function (el) {
+    el.hidden = !!q && plain(el.title).indexOf(q) === -1;
+    if (!el.hidden) shown++;
+  });
+  document.getElementById("no-match").hidden = !(q && cards.length && !shown);
+}
+document.getElementById("filter").addEventListener("input", applyFilter);
 
 function draw(data) {
   var shelf = document.getElementById("shelf");
   shelf.innerHTML = "";
   document.getElementById("count").textContent = "(" + data.books.length + ")";
+  var exports = data.exports || {};
   data.books.forEach(function (b) {
     var mark = bookmark(b.url);
     var el = card("a", b.name, "", mark ? tr("paragraph", { n: mark }) : tr("notStarted"), b.lang);
     el.href = b.url;
+    var row = mp3Row(b, exports[b.name]);
+    if (row) el.appendChild(row);
     shelf.appendChild(el);
   });
+  drawAudios(data.books.filter(function (b) { return b.mp3 && !exports[b.name]; }));
   Object.keys(data.jobs).forEach(function (name) {
     var status = data.jobs[name];
     var failed = status !== "building";
@@ -1335,7 +1949,11 @@ function draw(data) {
     p.className = "empty";
     p.textContent = tr("empty");
     shelf.appendChild(p);
+    // nothing on the shelf yet: the way to add one is already open
+    addBox.hidden = false;
   }
+  // the shelf was just drawn again, the search still applies
+  applyFilter();
   // without a console, this is the only place a voice download shows up
   var d = document.getElementById("download");
   var downloading = data.download && data.download.language;
@@ -1346,7 +1964,10 @@ function draw(data) {
     });
   }
   // keep asking only while something is being prepared or downloaded
-  var busy = downloading || Object.keys(data.jobs).some(function (k) { return data.jobs[k] === "building"; });
+  // var busy = downloading || Object.keys(data.jobs).some(function (k) { return data.jobs[k] === "building"; });
+  // or an mp3 is being made, for its progress
+  var busy = downloading || Object.keys(data.jobs).some(function (k) { return data.jobs[k] === "building"; })
+    || Object.keys(exports).some(function (k) { return typeof exports[k] === "object"; });
   if (busy && !polling) polling = setInterval(refresh, 2000);
   if (!busy && polling) { clearInterval(polling); polling = null; }
 }
@@ -1366,7 +1987,10 @@ function answered(r) {
     if (!r.ok) throw new Error(trError(body, r.status));
     say(tr("beingPrepared", { name: pretty(body.name) }), "good");
     // the new book should be seen arriving, so a folded shelf opens
-    fold(true);
+    // fold(true);
+    // ...and with tabs, on the books, with no search hiding it
+    showTab("books");
+    document.getElementById("filter").value = "";
     refresh();
   });
 }
@@ -1423,6 +2047,14 @@ box.addEventListener("drop", function (e) {
   e.preventDefault();
   upload(e.dataTransfer.files[0]);
 });
+// the box may be closed or on another tab: a file dragged over the page opens
+// it, so there is somewhere to drop it
+document.addEventListener("dragenter", function (e) {
+  if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, "Files") !== -1) {
+    showTab("books");
+    box.hidden = false;
+  }
+});
 
 refresh();
 </script>
@@ -1431,4 +2063,9 @@ refresh();
 """
 
 TEMPLATE = with_i18n(with_icons(TEMPLATE))
-SHELF = with_i18n(with_icons(SHELF))
+# SHELF = with_i18n(with_icons(SHELF))
+# the "buy me a coffee" link: a Stripe Payment Link where the person picks the
+# amount. Only the public link is here, no key: the program is downloaded by
+# anyone, and the payment happens entirely on Stripe's page
+COFFEE_URL = "https://buy.stripe.com/eVqfZhbkV2tp3J9a3f2B200"
+SHELF = with_i18n(with_icons(SHELF)).replace("@COFFEE@", COFFEE_URL)
