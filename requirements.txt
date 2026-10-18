@@ -17,3 +17,6 @@ rapidocr_onnxruntime>=1.2
 # Only for the packaged Windows program (readaloud.spec): its icon next to the
 # clock. Run from source it is not needed; server.py does without it.
 pystray>=0.19
+
+# MP3 export; the encoder comes compiled inside the wheel
+lameenc>=1.7
