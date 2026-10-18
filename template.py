@@ -58,7 +58,10 @@ var UI_TEXT = {
     stop: "stop and release the audio", slower: "slower", faster: "faster",
     read: "Read", pause: "Pause", bookmark: "paragraph {n} of {total}",
     downloadingVoiceShort: "downloading the voice… {p} % (only the first time)",
-    noAudio: "no audio: start server.py ({message})"
+    noAudio: "no audio: start server.py ({message})",
+    search: "search the book (Ctrl+F)", searchPlaceholder: "Search the book…",
+    noMatches: "nothing found", matches: "{n} of {total}", pageShort: "p. {n}",
+    prevMatch: "previous match (Shift+Enter)", nextMatch: "next match (Enter)"
   },
   de: {
     toggle: "Bücher ein- oder ausblenden", library: "Bibliothek",
@@ -92,7 +95,10 @@ var UI_TEXT = {
     stop: "anhalten und Audio freigeben", slower: "langsamer", faster: "schneller",
     read: "Vorlesen", pause: "Pause", bookmark: "Absatz {n} von {total}",
     downloadingVoiceShort: "Stimme wird heruntergeladen … {p} % (nur beim ersten Mal)",
-    noAudio: "kein Ton: starte server.py ({message})"
+    noAudio: "kein Ton: starte server.py ({message})",
+    search: "im Buch suchen (Strg+F)", searchPlaceholder: "Im Buch suchen …",
+    noMatches: "nichts gefunden", matches: "{n} von {total}", pageShort: "S. {n}",
+    prevMatch: "vorheriger Treffer (Umschalt+Enter)", nextMatch: "nächster Treffer (Enter)"
   },
   es: {
     toggle: "mostrar u ocultar los libros", library: "Biblioteca",
@@ -126,7 +132,10 @@ var UI_TEXT = {
     stop: "detener y liberar el audio", slower: "más lento", faster: "más rápido",
     read: "Leer", pause: "Pausa", bookmark: "párrafo {n} de {total}",
     downloadingVoiceShort: "descargando la voz… {p} % (solo la primera vez)",
-    noAudio: "sin audio: inicia server.py ({message})"
+    noAudio: "sin audio: inicia server.py ({message})",
+    search: "buscar en el libro (Ctrl+F)", searchPlaceholder: "Buscar en el libro…",
+    noMatches: "no se encontró nada", matches: "{n} de {total}", pageShort: "p. {n}",
+    prevMatch: "resultado anterior (Mayús+Enter)", nextMatch: "resultado siguiente (Enter)"
   }
 };
 // Which language: the one chosen in the library (EN · DE · ES, kept in
@@ -368,6 +377,36 @@ button:disabled { opacity: .4; cursor: default; }
   background: none;
   cursor: pointer;
 }
+
+/* the search panel. the browser's own Ctrl+F only sees the page on screen,
+   since the others are display: none, so the book is searched here instead */
+#search .icon { width: 1.1em; height: 1.1em; vertical-align: -.2em; }
+.panel.find { width: 24rem; max-height: 70vh; grid-template-rows: auto auto 1fr; }
+.find .row { display: flex; gap: .4rem; align-items: center; }
+.find input[type=search] {
+  flex: 1;
+  min-width: 0;
+  background: #0e1013;
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .4rem .6rem;
+  font: inherit;
+}
+.find .count { color: #7d8590; font-variant-numeric: tabular-nums; }
+.find ol { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+.find li {
+  padding: .35rem .5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.find li:hover, .find li.on { background: #232833; }
+.find li .where { color: #7d8590; margin-right: .4em; }
+.find li b { color: #f0d67a; font-weight: 600; }
+/* the match inside the book, drawn without touching the text: the paragraph's
+   textContent is what gets read out loud */
+::highlight(match) { background: #f0d67a; color: #14161a; }
 </style>
 </head>
 <body>
@@ -379,6 +418,7 @@ button:disabled { opacity: .4; cursor: default; }
   <button id="next" title="next page" data-t-title="nextPage">&rsaquo;</button>
   <span class="spacer"></span>
   <span id="notice"></span>
+  <button id="search" title="search the book (Ctrl+F)" data-t-title="search">@ICON:search@</button>
   <button id="colors" title="colors" data-t-title="colors">@ICON:palette@</button>
   <button id="smaller" title="smaller text" data-t-title="smaller">A-</button>
   <button id="bigger" title="bigger text" data-t-title="bigger">A+</button>
@@ -392,6 +432,16 @@ button:disabled { opacity: .4; cursor: default; }
   <label><span data-t="text">Text</span> <input type="color" id="c-ink"></label>
   <label><span data-t="highlight">Highlight</span> <input type="color" id="c-mark"></label>
   <button id="c-reset" data-t="reset">Reset</button>
+</div>
+
+<div class="panel find" id="find" hidden>
+  <div class="row">
+    <input type="search" id="query" placeholder="Search the book…" data-t-placeholder="searchPlaceholder" autocomplete="off">
+    <button id="match-prev" title="previous match (Shift+Enter)" data-t-title="prevMatch">&uarr;</button>
+    <button id="match-next" title="next match (Enter)" data-t-title="nextMatch">&darr;</button>
+  </div>
+  <span class="count" id="match-count"></span>
+  <ol id="results"></ol>
 </div>
 
 <main><!--BODY--></main>
@@ -723,8 +773,165 @@ setColors(colors);
   if (v) document.documentElement.style.setProperty(prop, v);
 });
 
+// searching the whole book. Ctrl+F in the browser only finds what is on the
+// page being shown, so it is taken over here. Case and accents are ignored:
+// "qualitat" finds "Qualität", which matters when typing German on a Spanish
+// keyboard. fold() keeps, for every folded character, where it came from, so
+// the match can be marked in the original text.
+var find = document.getElementById("find");
+var query = document.getElementById("query");
+var matches = [];   // {b: index into blocks, start, end} in the block's text
+var shown = -1;     // which of them is on screen
+
+function fold(s) {
+  var text = "", from = [];
+  for (var k = 0; k < s.length; k++) {
+    var f = s[k].normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+    for (var j = 0; j < f.length; j++) { text += f[j]; from.push(k); }
+  }
+  from.push(s.length);
+  return { text: text, from: from };
+}
+
+// folded once, the first time something is searched, not on every key
+var folded = null;
+function search(q) {
+  var needle = fold(q.trim()).text;
+  matches = [];
+  if (needle.length >= 2) {
+    if (!folded) folded = blocks.map(function (b) { return fold(b.textContent); });
+    folded.forEach(function (f, b) {
+      var at = f.text.indexOf(needle);
+      while (at !== -1) {
+        matches.push({ b: b, start: f.from[at], end: f.from[at + needle.length] });
+        at = f.text.indexOf(needle, at + needle.length);
+      }
+    });
+  }
+  // the first match from where you are reading on, not from the cover
+  shown = -1;
+  for (var m = 0; m < matches.length; m++) {
+    if (matches[m].b >= current) { shown = m; break; }
+  }
+  if (shown === -1 && matches.length) shown = 0;
+  drawResults(needle.length >= 2);
+  if (shown !== -1) showMatch(shown, false);
+  else markMatch(null);
+}
+
+// a list of every match: the page, and the words around it
+var LISTED = 300;
+function drawResults(searched) {
+  var list = document.getElementById("results");
+  list.textContent = "";
+  matches.slice(0, LISTED).forEach(function (m, n) {
+    var text = blocks[m.b].textContent;
+    var li = document.createElement("li");
+    var where = document.createElement("span");
+    where.className = "where";
+    where.textContent = tr("pageShort", { n: blocks[m.b].closest(".page").getAttribute("data-page") });
+    li.appendChild(where);
+    var a = Math.max(0, m.start - 40), z = Math.min(text.length, m.end + 60);
+    li.appendChild(document.createTextNode((a > 0 ? "…" : "") + text.slice(a, m.start)));
+    var hit = document.createElement("b");
+    hit.textContent = text.slice(m.start, m.end);
+    li.appendChild(hit);
+    li.appendChild(document.createTextNode(text.slice(m.end, z) + (z < text.length ? "…" : "")));
+    li.onclick = function () { showMatch(n, true); };
+    list.appendChild(li);
+  });
+  drawCount(searched);
+}
+
+function drawCount(searched) {
+  document.getElementById("match-count").textContent = !searched ? "" :
+    matches.length ? tr("matches", { n: shown + 1, total: matches.length }) : tr("noMatches");
+}
+
+// the match is drawn with the CSS Custom Highlight API, which leaves the DOM
+// alone; a browser without it still jumps to the right paragraph
+function markMatch(m) {
+  if (!window.CSS || !CSS.highlights) return;
+  CSS.highlights.delete("match");
+  if (!m) return;
+  var walker = document.createTreeWalker(blocks[m.b], NodeFilter.SHOW_TEXT);
+  var range = document.createRange(), seen = 0, node, started = false;
+  while ((node = walker.nextNode())) {
+    var len = node.nodeValue.length;
+    if (!started && m.start <= seen + len) { range.setStart(node, m.start - seen); started = true; }
+    if (started && m.end <= seen + len) { range.setEnd(node, m.end - seen); break; }
+    seen += len;
+  }
+  if (started) CSS.highlights.set("match", new Highlight(range));
+}
+
+// going through the matches only looks, so typing a search does not lose the
+// bookmark; clicking one in the list moves the reading point there, just like
+// clicking the paragraph itself
+function showMatch(n, fromList) {
+  if (!matches.length) return;
+  shown = (n + matches.length) % matches.length;
+  var m = matches[shown];
+  if (fromList && playing) playBlock(m.b);
+  else if (fromList) goTo(m.b, true);
+  else {
+    var p = pageOf(blocks[m.b]);
+    if (p !== page) showPage(p);
+    blocks[m.b].scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+  markMatch(m);
+  var items = document.getElementById("results").children;
+  Array.prototype.forEach.call(items, function (li, i) { li.classList.toggle("on", i === shown); });
+  if (items[shown] && !fromList) items[shown].scrollIntoView({ block: "nearest" });
+  drawCount(true);
+}
+
+function openFind() {
+  panel.hidden = true;
+  find.hidden = false;
+  query.focus();
+  query.select();
+}
+function closeFind() {
+  find.hidden = true;
+  markMatch(null);
+  query.blur();
+}
+
+// searched on a pause in typing, not on every key
+var typing = null;
+query.addEventListener("input", function () {
+  clearTimeout(typing);
+  typing = setTimeout(function () { typing = null; search(query.value); }, 150);
+});
+query.addEventListener("keydown", function (e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    // Enter before the pause: search now rather than step past the first match
+    if (typing !== null) { clearTimeout(typing); typing = null; search(query.value); }
+    else showMatch(shown + (e.shiftKey ? -1 : 1), false);
+  } else if (e.key === "Escape") closeFind();
+});
+document.getElementById("match-prev").onclick = function () { showMatch(shown - 1, false); };
+document.getElementById("match-next").onclick = function () { showMatch(shown + 1, false); };
+document.getElementById("search").onclick = function (e) {
+  e.stopPropagation();
+  if (find.hidden) openFind(); else closeFind();
+};
+find.addEventListener("click", function (e) { e.stopPropagation(); });
+// the colors button closes it, as a click anywhere else closes the colors
+document.getElementById("colors").addEventListener("click", function () { find.hidden = true; });
+
 document.addEventListener("keydown", function (e) {
-  if (e.key === " ") { e.preventDefault(); play(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+    e.preventDefault();
+    openFind();
+    return;
+  }
+  // typing in the search box is not a command for the reader
+  if (e.target.tagName === "INPUT") return;
+  if (e.key === "Escape" && !find.hidden) closeFind();
+  else if (e.key === " ") { e.preventDefault(); play(); }
   else if (e.key === "ArrowRight") step(1);
   else if (e.key === "ArrowLeft") step(-1);
   else if (e.key === "PageDown") showPage(page + 1, true);

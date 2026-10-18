@@ -21,6 +21,7 @@ browser version and the one actually used.
 """
 
 import os
+import re
 import wave
 import subprocess
 import shutil
@@ -960,6 +961,23 @@ def reading_document(body, title="Reader", language=DEFAULT_LANGUAGE):
         .replace("@LANG@", html.escape(language))
         .replace("<!--BODY-->", body)
     )
+
+
+def refresh(out):
+    """Put an already prepared book into the current TEMPLATE.
+
+    The template is written into every book's html, so a book prepared before
+    a change to the reader (the search, say) keeps the old reader. The body,
+    title and language are taken from the html itself: the PDF may be long
+    gone, and preparing the book again takes minutes.
+    """
+    with open(out, encoding="utf-8") as f:
+        page = f.read()
+    body = page[page.index("<main>") + len("<main>"):page.rindex("</main>")]
+    title = html.unescape(re.search(r"<title>(.*?)</title>", page, re.S).group(1))
+    language = re.search(r'<html lang="([^"]*)"', page).group(1)
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(reading_document(body, title, language))
 
 
 def generate_html(path, out, start=0, folder="figures", title=None):
