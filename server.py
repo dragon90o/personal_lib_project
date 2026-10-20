@@ -563,7 +563,12 @@ class Reader(SimpleHTTPRequestHandler):
                 if name not in exports and os.path.isfile(part):
                     exports[name] = "interrupted"
             # self.json(200, {"books": books, "jobs": JOBS, "download": DOWNLOAD})
-            self.json(200, {"books": books, "jobs": JOBS, "download": DOWNLOAD, "exports": exports})
+            # self.json(200, {"books": books, "jobs": JOBS, "download": DOWNLOAD, "exports": exports})
+            # "store": whether "Rate it in the Microsoft Store" makes sense. Any
+            # Windows 10/11 opens the ms-windows-store: link; Linux has no Store
+            store = sys.platform == "win32"
+            self.json(200, {"books": books, "jobs": JOBS, "download": DOWNLOAD,
+                            "exports": exports, "store": store})
         elif path == "/favicon.ico":
             # the browser asks for it by itself; the png is what it gets
             try:
@@ -922,6 +927,94 @@ def data_home():
     return os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
 
 
+# The question about the desktop shortcut, in the language of Windows, like the
+# tray menu. Asked once, the first time the Store version starts.
+SHORTCUT_TEXT = {
+    "en": "Would you like a ReadAloud shortcut on your desktop?",
+    "de": "Möchtest du eine ReadAloud-Verknüpfung auf dem Desktop?",
+    "es": "¿Quieres un acceso directo de ReadAloud en el escritorio?",
+}
+# the Application Id in packaging/msix/AppxManifest.xml
+STORE_APP_ID = "ReadAloud"
+SHORTCUT_ASKED = "desktop_shortcut_asked"
+
+
+def package_family():
+    """The package family name when running as the installed Store (MSIX) app,
+    None otherwise (from source, or the zipped ReadAloud.exe)."""
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+
+        length = ctypes.c_uint32(0)
+        kernel32 = ctypes.windll.kernel32
+        # 122 = ERROR_INSUFFICIENT_BUFFER: packaged, and now we know the size;
+        # 15700 = APPMODEL_ERROR_NO_PACKAGE: not packaged
+        if kernel32.GetCurrentPackageFamilyName(ctypes.byref(length), None) != 122:
+            return None
+        name = ctypes.create_unicode_buffer(length.value)
+        if kernel32.GetCurrentPackageFamilyName(ctypes.byref(length), name) != 0:
+            return None
+        return name.value
+    except Exception:
+        return None
+
+
+def offer_desktop_shortcut():
+    """Ask once whether to put a ReadAloud shortcut on the desktop, and make it.
+
+    Store apps only get a Start menu entry, never a desktop icon, and people
+    looked for one there after installing. The shortcut opens the installed app
+    (shell:AppsFolder), not ReadAloud.exe: that folder changes with every Store
+    update. Its icon goes in the package's own LocalCache, a real path Explorer
+    can read (writes to %LOCALAPPDATA% itself are redirected for packaged apps).
+    Whatever goes wrong only ends up in the log: the reader works the same.
+    """
+    family = package_family()
+    if not family or os.path.exists(SHORTCUT_ASKED):
+        return
+    try:
+        import ctypes
+        import subprocess
+
+        with open(SHORTCUT_ASKED, "w", encoding="utf-8") as f:
+            f.write("asked\n")
+        text = SHORTCUT_TEXT.get(system_language(), SHORTCUT_TEXT["en"])
+        # 0x4 yes/no, 0x20 question icon, 0x40000 on top of the browser; 6 = yes
+        if ctypes.windll.user32.MessageBoxW(None, text, APP_NAME, 0x4 | 0x20 | 0x40000) != 6:
+            print("desktop shortcut: no, thanks")
+            return
+        cache = os.path.join(os.environ["LOCALAPPDATA"], "Packages", family, "LocalCache")
+        os.makedirs(cache, exist_ok=True)
+        icon = os.path.join(cache, "readaloud.ico")
+        from PIL import Image
+
+        Image.open(resource("assets", "readaloud.png")).save(
+            icon, sizes=[(16, 16), (32, 32), (48, 48), (256, 256)]
+        )
+        # PowerShell makes the .lnk (no pywin32 in the bundle) and finds the real
+        # desktop, also when it lives in OneDrive. The values go in by
+        # environment, so no quoting of paths inside the script
+        script = (
+            "$d = [Environment]::GetFolderPath('Desktop');"
+            "$s = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $d 'ReadAloud PDF Library.lnk'));"
+            "$s.TargetPath = Join-Path $env:WINDIR 'explorer.exe';"
+            "$s.Arguments = $env:RA_TARGET;"
+            "$s.IconLocation = $env:RA_ICON;"
+            "$s.Save()"
+        )
+        env = dict(os.environ, RA_TARGET="shell:AppsFolder\\%s!%s" % (family, STORE_APP_ID), RA_ICON=icon)
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            env=env, capture_output=True, text=True, timeout=30,
+            creationflags=0x08000000,  # CREATE_NO_WINDOW: no console flashing
+        )
+        print("desktop shortcut:", "made" if result.returncode == 0 else result.stderr.strip())
+    except Exception as e:
+        print("desktop shortcut failed (%s)" % e)
+
+
 def main():
     """Prepare a book or open the library, and serve until stopped."""
     if frozen():
@@ -974,6 +1067,11 @@ def main():
     # paragraph read waits for it, since load_voice() goes through the same
     # lock, and the pages show the progress (DOWNLOAD).
     threading.Thread(target=ensure_voice, args=(DEFAULT_LANGUAGE,), daemon=True).start()
+    # the first time the Store version starts, ask about a desktop shortcut. On
+    # its own thread: the message box waits for an answer, and the library and
+    # the tray should not wait with it
+    if frozen():
+        threading.Thread(target=offer_desktop_shortcut, daemon=True).start()
     translate.warm_up(ensure_voice)
     try:
         if frozen():

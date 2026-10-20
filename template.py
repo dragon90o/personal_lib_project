@@ -72,6 +72,7 @@ var UI_TEXT = {
     coffeeAsk: "Did listening to your PDF help?",
     coffeeText: "ReadAloud is free. If it helped you, buy me a coffee.",
     tabBooks: "Books", tabHelp: "Help", filterBooks: "Search a book…",
+    rateText: "Is ReadAloud helpful?", rateLink: "Rate it in the Microsoft Store",
     noAudios: "No MP3 yet. Use “Make MP3” on a book.",
     feedbackTitle: "Errors or suggestions",
     feedbackPlaceholder: "What went wrong, or what would you change?",
@@ -130,6 +131,7 @@ var UI_TEXT = {
     coffeeAsk: "Hat es dir geholfen, dein PDF zu hören?",
     coffeeText: "ReadAloud ist kostenlos. Wenn es dir geholfen hat, lad mich auf einen Kaffee ein.",
     tabBooks: "Bücher", tabHelp: "Hilfe", filterBooks: "Buch suchen …",
+    rateText: "Ist ReadAloud hilfreich?", rateLink: "Im Microsoft Store bewerten",
     noAudios: "Noch kein MP3. Nutze „MP3 erstellen“ bei einem Buch.",
     feedbackTitle: "Fehler oder Vorschläge",
     feedbackPlaceholder: "Was ist schiefgelaufen oder was würdest du ändern?",
@@ -188,6 +190,7 @@ var UI_TEXT = {
     coffeeAsk: "¿Te sirvió escuchar tu PDF?",
     coffeeText: "ReadAloud es gratis. Si te ayudó, invítame un café.",
     tabBooks: "Libros", tabHelp: "Ayuda", filterBooks: "Buscar un libro…",
+    rateText: "¿Te sirve ReadAloud?", rateLink: "Valóralo en Microsoft Store",
     noAudios: "Todavía no hay MP3. Usa «Crear MP3» en un libro.",
     feedbackTitle: "Errores o sugerencias",
     feedbackPlaceholder: "¿Qué falló o qué cambiarías?",
@@ -1092,6 +1095,11 @@ h1 { cursor: pointer; user-select: none; } */
 .coffee-btn:hover { background: #00ff0014; }
 .coffee-btn .icon, .coffee-box .icon { width: 16px; height: 16px; flex: none; }
 .tabs .coffee-btn { margin-bottom: .4rem; }
+/* the rating line in Help, under the form */
+.rate-line { display: flex; align-items: center; gap: .4rem; margin: 0; color: var(--muted); font-size: .9rem; }
+.rate-line .icon { width: 16px; height: 16px; color: #f0d67a; }
+.rate-line a { color: var(--accent); text-decoration: none; }
+.rate-line a:hover { text-decoration: underline; }
 /* under the audios: the question, a line, and the same button */
 .coffee-box {
   display: flex;
@@ -1409,6 +1417,7 @@ footer.brand path { fill: none; stroke: var(--folder); stroke-width: 8; stroke-l
     <a class="coffee-btn" href="@COFFEE@" target="_blank" rel="noopener">@ICON:coffee@ <span data-t="coffeeShort">Buy me a coffee</span></a>
   </nav>
 
+
   <!-- above the tabs' content: what the page says shows whatever tab is open -->
   <div id="download"></div>
   <div id="message"></div>
@@ -1478,6 +1487,8 @@ footer.brand path { fill: none; stroke: var(--folder); stroke-width: 8; stroke-l
     </div>
     <div id="fb-status"></div>
   </form>
+  <!-- a quiet line, no banner: whoever comes to Help can also leave a rating -->
+  <p class="rate-line" id="rate-line" hidden>@ICON:star@ <span data-t="rateText">Is ReadAloud helpful?</span> <a href="@STORE_REVIEW@" data-t="rateLink">Rate it in the Microsoft Store</a></p>
   <!-- <p class="coffee-line"><a href="@COFFEE@" ...>Like ReadAloud? Buy me a coffee ☕</a></p>
        too many coffees: here people come to complain or suggest. It stays in the menu -->
   </section>
@@ -1486,9 +1497,9 @@ footer.brand path { fill: none; stroke: var(--folder); stroke-width: 8; stroke-l
 <!-- signature, the same as the footer of dravvt.com: the green wave, the
      name and the year, small in the bottom corner -->
 <footer class="brand">
-  <!-- <a href="@COFFEE@" target="_blank" rel="noopener" data-t="coffeeShort">Buy me a coffee ☕</a>
-  <span>·</span> : the coffee moved to the menu -->
-  <a href="https://dravvt.com" target="_blank" rel="noopener">
+  <!-- to the projects on dravvt.com, where ReadAloud is, in the language of
+       the interface (set below; English until then) -->
+  <a id="brand-link" href="https://dravvt.com/projects" target="_blank" rel="noopener">
     <svg viewBox="0 0 40 30" aria-hidden="true"><path d="M 4 15 Q 12 4 20 15 Q 28 26 36 15"></path></svg>
     <span>dravvt</span>
   </a>
@@ -1513,6 +1524,9 @@ document.documentElement.lang = UI_LANG;
 rememberLang(UI_LANG);
 // the year of the signature at the bottom, never out of date
 document.getElementById("year").textContent = new Date().getFullYear();
+// dravvt.com/projects is the English one; Spanish and German carry their prefix
+document.getElementById("brand-link").href =
+  "https://dravvt.com" + (UI_LANG === "en" ? "" : "/" + UI_LANG) + "/projects";
 
 // EN · DE · ES in the corner: another language for the whole interface
 (function () {
@@ -1676,6 +1690,7 @@ function drawAudios(books) {
   document.getElementById("no-audios").hidden = !!books.length;
   document.getElementById("audio-list").hidden = !books.length;
   document.getElementById("coffee-box").hidden = !books.length;
+  syncCoffee();
   document.getElementById("audio-count").textContent = books.length ? "(" + books.length + ")" : "";
   var list = document.getElementById("audio-list");
   list.textContent = "";
@@ -1830,6 +1845,7 @@ function deleteMp3(name) {
     .catch(function (err) { say(err.message, "bad"); });
 }
 
+
 // errors or suggestions: the server passes them on to dravvt.com
 document.getElementById("feedback").onsubmit = function (e) {
   e.preventDefault();
@@ -1894,6 +1910,15 @@ function showTab(name) {
     b.setAttribute("aria-selected", t === name ? "true" : "false");
   });
   try { localStorage.setItem("library:tab", name); } catch (e) {}
+  syncCoffee();
+}
+
+// one coffee at a time: on Audios, when its box is there, the menu's button
+// steps aside (the box says more: it speaks of the PDF they just heard)
+function syncCoffee() {
+  var onAudios = !document.getElementById("tab-audios").hidden;
+  var box = !document.getElementById("coffee-box").hidden;
+  document.querySelector(".tabs .coffee-btn").hidden = onAudios && box;
 }
 Array.prototype.forEach.call(document.querySelectorAll(".tabs [data-tab]"), function (b) {
   b.onclick = function () { showTab(b.getAttribute("data-tab")); };
@@ -1954,6 +1979,9 @@ function draw(data) {
   }
   // the shelf was just drawn again, the search still applies
   applyFilter();
+  // "Rate it in the Microsoft Store", in Help: only where there is a Store,
+  // the packaged Windows program
+  document.getElementById("rate-line").hidden = !data.store;
   // without a console, this is the only place a voice download shows up
   var d = document.getElementById("download");
   var downloading = data.download && data.download.language;
@@ -2068,4 +2096,10 @@ TEMPLATE = with_i18n(with_icons(TEMPLATE))
 # amount. Only the public link is here, no key: the program is downloaded by
 # anyone, and the payment happens entirely on Stripe's page
 COFFEE_URL = "https://buy.stripe.com/eVqfZhbkV2tp3J9a3f2B200"
-SHELF = with_i18n(with_icons(SHELF)).replace("@COFFEE@", COFFEE_URL)
+# SHELF = with_i18n(with_icons(SHELF)).replace("@COFFEE@", COFFEE_URL)
+# the app in the Microsoft Store (Partner Center, Product Identity). The
+# ms-windows-store: link opens the Store app straight on its review page
+STORE_ID = "9N1ZZ5R1X29M"
+SHELF = (with_i18n(with_icons(SHELF))
+         .replace("@COFFEE@", COFFEE_URL)
+         .replace("@STORE_REVIEW@", "ms-windows-store://review/?ProductId=" + STORE_ID))
