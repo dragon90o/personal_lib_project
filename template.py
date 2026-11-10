@@ -83,7 +83,19 @@ var UI_TEXT = {
     err_feedback_invalid: "Check the email address.",
     err_feedback_rate_limited: "Too many messages in a short time. Try again in an hour.",
     err_feedback_send_failed: "It could not be sent. Try again later.",
-    err_feedback_offline: "No internet connection: it could not be sent."
+    err_feedback_offline: "No internet connection: it could not be sent.",
+    tabVoices: "Voices",
+    voicesLead: "Each language reads with the voice you pick here. Listen first: only the one you pick is downloaded, once, and then it reads without internet.",
+    listen: "listen to {name}", useVoice: "Use this voice", downloadVoiceMb: "Download · {mb} MB",
+    inUse: "In use", voiceInstalled: "installed", woman: "Woman", man: "Man",
+    voiceWaiting: "waiting…", voiceFailed: "Could not download it: {message}",
+    err_no_voice: "there is no such voice",
+    mp3Ready: "MP3 ready", seeAudios: "See in Audios",
+    mp3Which: "Which voice for the MP3?", mp3FastLine: "fast · download time about {time}",
+    mp3NiceLine: "more natural · download time about {time}", cancel: "Cancel",
+    mp3KeepOpen: "Leave ReadAloud open while it is made.",
+    exportingLeft: "MP3 {p} % · about {time} left",
+    timeMin: "{n} min", timeHours: "{h} h {m} min"
   },
   de: {
     toggle: "Bücher ein- oder ausblenden", library: "Bibliothek",
@@ -142,7 +154,19 @@ var UI_TEXT = {
     err_feedback_invalid: "Prüfe die E-Mail-Adresse.",
     err_feedback_rate_limited: "Zu viele Nachrichten in kurzer Zeit. Versuch es in einer Stunde wieder.",
     err_feedback_send_failed: "Konnte nicht gesendet werden. Versuch es später noch einmal.",
-    err_feedback_offline: "Keine Internetverbindung: konnte nicht gesendet werden."
+    err_feedback_offline: "Keine Internetverbindung: konnte nicht gesendet werden.",
+    tabVoices: "Stimmen",
+    voicesLead: "Jede Sprache liest mit der Stimme, die du hier wählst. Hör zuerst rein: Nur die gewählte wird heruntergeladen, einmal, danach liest sie ohne Internet.",
+    listen: "{name} anhören", useVoice: "Diese Stimme nutzen", downloadVoiceMb: "Herunterladen · {mb} MB",
+    inUse: "In Verwendung", voiceInstalled: "installiert", woman: "Frau", man: "Mann",
+    voiceWaiting: "wartet …", voiceFailed: "Konnte nicht heruntergeladen werden: {message}",
+    err_no_voice: "diese Stimme gibt es nicht",
+    mp3Ready: "MP3 fertig", seeAudios: "In Audios ansehen",
+    mp3Which: "Mit welcher Stimme?", mp3FastLine: "schnell · Downloadzeit ca. {time}",
+    mp3NiceLine: "natürlicher · Downloadzeit ca. {time}", cancel: "Abbrechen",
+    mp3KeepOpen: "Lass ReadAloud offen, solange es erstellt wird.",
+    exportingLeft: "MP3 {p} % · noch ca. {time}",
+    timeMin: "{n} Min.", timeHours: "{h} Std. {m} Min."
   },
   es: {
     toggle: "mostrar u ocultar los libros", library: "Biblioteca",
@@ -201,7 +225,19 @@ var UI_TEXT = {
     err_feedback_invalid: "Revisa el email.",
     err_feedback_rate_limited: "Demasiados mensajes seguidos. Inténtalo dentro de una hora.",
     err_feedback_send_failed: "No se pudo enviar. Inténtalo más tarde.",
-    err_feedback_offline: "Sin conexión a internet: no se pudo enviar."
+    err_feedback_offline: "Sin conexión a internet: no se pudo enviar.",
+    tabVoices: "Voces",
+    voicesLead: "Cada idioma lee con la voz que elijas aquí. Escúchalas antes: solo se descarga la que elijas, una vez, y después lee sin internet.",
+    listen: "escuchar a {name}", useVoice: "Usar esta voz", downloadVoiceMb: "Descargar · {mb} MB",
+    inUse: "En uso", voiceInstalled: "instalada", woman: "Mujer", man: "Hombre",
+    voiceWaiting: "en espera…", voiceFailed: "No se pudo descargar: {message}",
+    err_no_voice: "esa voz no existe",
+    mp3Ready: "MP3 listo", seeAudios: "Ver en Audios",
+    mp3Which: "¿Con qué voz?", mp3FastLine: "rápida · tiempo de descarga unos {time}",
+    mp3NiceLine: "más natural · tiempo de descarga unos {time}", cancel: "Cancelar",
+    mp3KeepOpen: "Deja ReadAloud abierto mientras se crea.",
+    exportingLeft: "MP3 {p} % · faltan unos {time}",
+    timeMin: "{n} min", timeHours: "{h} h {m} min"
   }
 };
 // Which language: the one chosen in the library (EN · DE · ES, kept in
@@ -254,6 +290,21 @@ function trError(body, status) {
   each("data-t", function (el, s) { el.textContent = s; });
   each("data-t-title", function (el, s) { el.title = s; });
   each("data-t-placeholder", function (el, s) { el.placeholder = s; });
+})();
+// every page (the library and each book) tells the server it is still open,
+// and when it closes: with none left the program stops by itself
+// (watch_pages in server.py), so closing the browser closes ReadAloud
+(function () {
+  // each page its own id, so the server can tell when the last one closed
+  var id = Math.random().toString(36).slice(2);
+  function alive() { fetch("/alive?id=" + id, { cache: "no-store" }).catch(function () {}); }
+  alive();
+  setInterval(alive, 15000);
+  // back to a page kept by the browser (the back button): open again
+  addEventListener("pageshow", function (e) { if (e.persisted) alive(); });
+  addEventListener("pagehide", function () {
+    if (navigator.sendBeacon) navigator.sendBeacon("/bye?id=" + id);
+  });
 })();
 """
 
@@ -538,7 +589,14 @@ var current = 0;
 var page = 0;
 var playing = false;
 var audio = new Audio();
-var nextWav = null;   // the block after this one, already synthesized
+// var nextWav = null;   // the block after this one, already synthesized
+// the next blocks, being synthesized or ready: index -> promise of the wav's
+// url. Kept as the promise, not the url, so a paragraph that ends before the
+// next one is ready waits for it instead of asking the server for it again
+var ahead = {};
+// how many paragraphs ahead are prepared: Kokoro is slower than Piper, and
+// with only one a short paragraph followed by a long one left a pause
+var AHEAD = 2;
 var loaded = -1;      // which block the loaded audio belongs to
 
 function save() {
@@ -618,13 +676,29 @@ function fetchWav(i) {
     .then(function (b) { return URL.createObjectURL(b); });
 }
 
+// function preload(i) {
+//   if (nextWav && nextWav.i === i) return;
+//   if (nextWav) URL.revokeObjectURL(nextWav.url);
+//   nextWav = null;
+//   fetchWav(i).then(function (url) {
+//     if (url) nextWav = { i: i, url: url };
+//   }).catch(function () {});
+// }
 function preload(i) {
-  if (nextWav && nextWav.i === i) return;
-  if (nextWav) URL.revokeObjectURL(nextWav.url);
-  nextWav = null;
-  fetchWav(i).then(function (url) {
-    if (url) nextWav = { i: i, url: url };
-  }).catch(function () {});
+  if (i < 0 || i >= blocks.length || ahead[i]) return;
+  ahead[i] = fetchWav(i);
+  // a failed one is asked again when its turn comes
+  ahead[i].catch(function () { delete ahead[i]; });
+}
+
+// let go of what is no longer just ahead of `from` (after a jump, say)
+function forget(from) {
+  Object.keys(ahead).forEach(function (k) {
+    k = +k;
+    if (k > from && k <= from + AHEAD) return;
+    ahead[k].then(function (url) { if (url) URL.revokeObjectURL(url); }).catch(function () {});
+    delete ahead[k];
+  });
 }
 
 // while a paragraph is being waited for, the voice may still be downloading
@@ -651,20 +725,36 @@ function watchDownload(on) {
 
 function playBlock(i) {
   if (i < 0 || i >= blocks.length) { stop(); return; }
+  // whatever was sounding stops first: clicking another paragraph while
+  // reading let the old one go on, and its "ended" then skipped one more
+  audio.pause();
   current = i;
   goTo(i, true);
   var ready;
-  if (nextWav && nextWav.i === i) {
-    ready = Promise.resolve(nextWav.url);
-    nextWav = null;
-  } else {
-    blocks[i].classList.add("loading");
-    watchDownload(true);
-    ready = fetchWav(i);
-  }
+  // if (nextWav && nextWav.i === i) {
+  //   ready = Promise.resolve(nextWav.url);
+  //   nextWav = null;
+  // } else {
+  //   blocks[i].classList.add("loading");
+  //   watchDownload(true);
+  //   ready = fetchWav(i);
+  // }
+  // the one already on its way (or ready) if there is one; the marks only
+  // stay on screen if it is actually still being made
+  ready = ahead[i] || fetchWav(i);
+  delete ahead[i];
+  forget(i);
+  blocks[i].classList.add("loading");
+  watchDownload(true);
   ready.then(function (url) {
-    watchDownload(false);
     blocks[i].classList.remove("loading");
+    // skipping quickly back and forth starts one of these per paragraph passed
+    // over; one that arrives late must not play over the paragraph now selected
+    if (i !== current) {
+      if (url) URL.revokeObjectURL(url);
+      return;
+    }
+    watchDownload(false);
     if (!playing) return;
     audio.src = url;
     // a new src resets playbackRate to the default in some browsers, so it is
@@ -672,10 +762,13 @@ function playBlock(i) {
     audio.playbackRate = speed;
     loaded = i;
     audio.play();
-    preload(i + 1);
+    // preload(i + 1);
+    for (var k = 1; k <= AHEAD; k++) preload(i + k);
   }).catch(function (e) {
-    watchDownload(false);
     blocks[i].classList.remove("loading");
+    // the failure of a paragraph already left behind does not stop the reading
+    if (i !== current) return;
+    watchDownload(false);
     playing = false;
     drawPlay();
     document.getElementById("notice").textContent =
@@ -692,10 +785,12 @@ function drawPlay() {
 }
 
 function play() {
-  if (nextWav && nextWav.i !== current) {
-    URL.revokeObjectURL(nextWav.url);
-    nextWav = null;
-  }
+  // if (nextWav && nextWav.i !== current) {
+  //   URL.revokeObjectURL(nextWav.url);
+  //   nextWav = null;
+  // }
+  // what is no longer ahead of where we are goes (playBlock also does this)
+  forget(current);
   if (playing) {
     playing = false;
     audio.pause();
@@ -1253,6 +1348,20 @@ a.book:hover { background: var(--card-hover); transform: translateY(-2px); }
 .book .mp3 .progress { color: var(--accent); font-variant-numeric: tabular-nums; }
 .book .mp3.bad { color: var(--error); }
 .book .mp3 .detail { color: var(--muted); font-size: .7rem; word-break: break-word; }
+/* "Which voice for the MP3?": two buttons the width of the card, the name
+   and under it fast or more natural, with the time */
+.book .mp3.choose { align-self: stretch; gap: .45rem; }
+.book .mp3.choose > b { font-size: .8rem; }
+/* darker than the card, with a border that shows: on hover the card turns
+   the buttons' own colour and they disappeared into it */
+.book .mp3 .choice { display: grid; gap: .1rem; width: 100%; padding: .45rem .5rem; text-align: center;
+  background: var(--bg); border: 1px solid #3a414c; }
+.book .mp3 .choice strong { font-size: .85rem; }
+.book .mp3 .choice span { color: var(--muted); font-size: .72rem; }
+.book .mp3 .choice:hover { border-color: var(--accent); background: #00ff0014; }
+.book .mp3 .choice:hover strong { color: var(--accent); }
+.book .mp3 .cancel { background: none; border: 0; color: var(--muted); padding: 0; font-size: .75rem; }
+.book .mp3 .cancel:hover { color: var(--ink); background: none; }
 /* the MP3s, one row each: the name, then the player, Save and delete */
 .audios {
   list-style: none;
@@ -1397,6 +1506,31 @@ footer.brand path { fill: none; stroke: var(--folder); stroke-width: 8; stroke-l
 .languages { float: right; display: flex; gap: .25rem; }
 .languages button { padding: .2rem .5rem; font-size: .8rem; color: var(--muted); }
 .languages button.on { color: var(--accent); border-color: var(--accent); }
+/* the voices: one row each, the sample to listen to, the name, and use or
+   download */
+.voices { display: grid; gap: .6rem; margin-bottom: 1.5rem; }
+.voice {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: .8rem;
+  padding: .7rem .8rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.voice.on { border-color: var(--accent); }
+.voice .listen { width: 2.5rem; height: 2.5rem; border-radius: 50%; padding: 0; display: grid; place-items: center; }
+.voice .who b { display: block; }
+.voice .who span { color: var(--muted); font-size: .8rem; }
+.voice .use { white-space: nowrap; }
+.voice .use.get { background: var(--accent); color: #0b0d0f; border-color: var(--accent); font-weight: 600; }
+.voice .state { color: var(--accent); font-size: .85rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.voice .state.bad { color: var(--error); white-space: normal; }
+@media (max-width: 480px) {
+  .voice { grid-template-columns: auto 1fr; }
+  .voice > :nth-child(3) { grid-column: 1 / -1; }
+}
 </style>
 </head>
 <body>
@@ -1412,6 +1546,7 @@ footer.brand path { fill: none; stroke: var(--folder); stroke-width: 8; stroke-l
   <nav class="tabs" role="tablist">
     <button role="tab" data-tab="books"><span data-t="tabBooks">Books</span> <span class="n" id="count"></span></button>
     <button role="tab" data-tab="audios"><span data-t="audios">Audios</span> <span class="n" id="audio-count"></span></button>
+    <button role="tab" data-tab="voices" data-t="tabVoices">Voices</button>
     <button role="tab" data-tab="help" data-t="tabHelp">Help</button>
     <!-- not a tab: always in sight, and quiet (an outline, no fill) -->
     <a class="coffee-btn" href="@COFFEE@" target="_blank" rel="noopener">@ICON:coffee@ <span data-t="coffeeShort">Buy me a coffee</span></a>
@@ -1471,6 +1606,12 @@ footer.brand path { fill: none; stroke: var(--folder); stroke-width: 8; stroke-l
       </div>
       <a class="coffee-btn" href="@COFFEE@" target="_blank" rel="noopener">@ICON:coffee@ <span data-t="coffeeShort">Buy me a coffee</span></a>
     </div>
+  </section>
+
+  <!-- the voice of each language, to listen to and change (voices.py) -->
+  <section class="tab" id="tab-voices" hidden>
+    <p class="lead" data-t="voicesLead">Each language reads with the voice you pick here.</p>
+    <div id="voices-all"></div>
   </section>
 
   <section class="tab" id="tab-help" hidden>
@@ -1635,15 +1776,76 @@ function cardButton(label, icon, onclick) {
 // the MP3 row of a book's card. status is what /library says in "exports":
 // {done, total} while it is being made, "failed: ..." or "interrupted"; with
 // nothing there, the book either has its mp3 or not
+// "12 min", "1 h 5 min": how long an MP3 takes, from the server's seconds
+function duration(seconds) {
+  var m = Math.max(1, Math.round(seconds / 60));
+  return m < 60 ? tr("timeMin", { n: m }) : tr("timeHours", { h: Math.floor(m / 60), m: m % 60 });
+}
+
+// the books whose "Make MP3" was clicked: name -> what /export-options said,
+// so the choice survives the shelf being redrawn while it is open
+var mp3Options = {};
+
+function askMp3(name) {
+  fetch("/export-options?name=" + encodeURIComponent(name))
+    .then(function (r) {
+      return r.json().then(function (body) {
+        if (!r.ok) throw new Error(trError(body, r.status));
+        // the chosen voice is the fast one: nothing to choose
+        if (!body.chosen) { exportMp3(name, true); return; }
+        mp3Options[name] = body;
+        refresh();
+      });
+    })
+    .catch(function (err) { say(err.message, "bad"); });
+}
+
 function mp3Row(b, status) {
   var row = document.createElement("div");
   row.className = "mp3";
-  var start = function () { exportMp3(b.name); };
+  // var start = function () { exportMp3(b.name); };
+  // first the choice between the fast voice and the chosen one, each with its time
+  var start = function () { askMp3(b.name); };
+  var options = mp3Options[b.name];
+  // if (options && !status) {
+  // also after a failure or an interruption ("Retry" asks the same question);
+  // only not while one is being made
+  if (options && !(status && typeof status === "object")) {
+    row.className += " choose";
+    var question = document.createElement("b");
+    question.textContent = tr("mp3Which");
+    row.appendChild(question);
+    // the voice's name, and under it what sets it apart and how long it takes
+    var choice = function (voice, line, fast) {
+      var c = cardButton("", "", function () { delete mp3Options[b.name]; exportMp3(b.name, fast); });
+      c.className = "choice";
+      var n = document.createElement("strong");
+      n.textContent = voice.name;
+      var l = document.createElement("span");
+      l.textContent = tr(line, { time: duration(voice.seconds) });
+      c.appendChild(n);
+      c.appendChild(l);
+      row.appendChild(c);
+    };
+    choice(options.fast, "mp3FastLine", true);
+    choice(options.chosen, "mp3NiceLine", false);
+    var hint = document.createElement("span");
+    hint.className = "detail";
+    hint.textContent = tr("mp3KeepOpen");
+    row.appendChild(hint);
+    var cancel = cardButton(tr("cancel"), "", function () { delete mp3Options[b.name]; refresh(); });
+    cancel.className = "cancel";
+    row.appendChild(cancel);
+    return row;
+  }
   if (status && typeof status === "object") {
     var p = status.total ? Math.floor(100 * status.done / status.total) : 0;
     var s = document.createElement("span");
     s.className = "progress";
-    s.textContent = tr("exporting", { p: p });
+    // s.textContent = tr("exporting", { p: p });
+    // and how long is left, so a slow voice does not look stuck
+    s.textContent = status.left ? tr("exportingLeft", { p: p, time: duration(status.left) })
+                                : tr("exporting", { p: p });
     row.appendChild(s);
   } else if (status) {
     // a failure stays on the card until it is retried: nobody should be left
@@ -1665,8 +1867,16 @@ function mp3Row(b, status) {
   //   row.appendChild(cardButton(tr("downloadMp3"), DOWNLOAD_ICON, function () { ... }));
   // a book that has its mp3 shows nothing here: the mp3 is in Audios, below
   // the shelf (two things on one card was confusing)
+  // } else if (b.mp3) {
+  //   return null;
+  // ready: says so, and leads to it in Audios (an empty card left people
+  // wondering whether it had worked)
   } else if (b.mp3) {
-    return null;
+    var ready = document.createElement("span");
+    ready.className = "progress";
+    ready.textContent = tr("mp3Ready");
+    row.appendChild(ready);
+    row.appendChild(cardButton(tr("seeAudios"), "", function () { showTab("audios"); }));
   } else {
     var make = cardButton(tr("exportMp3"), DOWNLOAD_ICON, start);
     make.title = tr("exportMp3Title");
@@ -1877,11 +2087,14 @@ document.getElementById("feedback").onsubmit = function (e) {
     .then(function () { send.disabled = false; });
 };
 
-function exportMp3(name) {
+// function exportMp3(name) {
+// fast: with the language's quick voice instead of the chosen one
+function exportMp3(name, fast) {
   fetch("/export", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: name })
+    // body: JSON.stringify({ name: name })
+    body: JSON.stringify({ name: name, fast: !!fast })
   })
     .then(function (r) {
       return r.json().then(function (body) {
@@ -1901,7 +2114,8 @@ function exportMp3(name) {
 // the shelf no longer folds: the tabs and the search took its place
 
 // Books · Audios · Help. The last one open is remembered
-var TABS = ["books", "audios", "help"];
+// var TABS = ["books", "audios", "help"];
+var TABS = ["books", "audios", "voices", "help"];
 function showTab(name) {
   TABS.forEach(function (t) {
     document.getElementById("tab-" + t).hidden = t !== name;
@@ -2084,6 +2298,118 @@ document.addEventListener("dragenter", function (e) {
   }
 });
 
+// --- voices (voices.py): the Voices tab --------------------------------------
+// what GET /voices said last: {languages: {de: [...]}, chosen, download, errors}
+var VOICES = null;
+var voicePolling = null;
+// one sample at a time, for the whole page
+var sample = new Audio();
+var sampleId = null;
+sample.addEventListener("ended", function () { sampleId = null; drawVoices(); });
+
+function loadVoices() {
+  return fetch("/voices").then(function (r) { return r.json(); }).then(function (d) {
+    VOICES = d;
+    drawVoices();
+    // keep asking while something downloads, for its progress
+    var busy = d.download && d.download.language;
+    if (busy && !voicePolling) voicePolling = setInterval(loadVoices, 1500);
+    if (!busy && voicePolling) { clearInterval(voicePolling); voicePolling = null; }
+  });
+}
+
+// what a voice's row says on the right: in use, its download, or a button
+function voiceAction(lang, v) {
+  var errors = VOICES.errors || {}, d = VOICES.download || {};
+  var el;
+  if (errors[v.id]) {
+    el = document.createElement("span");
+    el.className = "state bad";
+    el.textContent = tr("voiceFailed", { message: errors[v.id] });
+    return el;
+  }
+  if (v.chosen && !v.installed) {
+    el = document.createElement("span");
+    el.className = "state";
+    // Kokoro says which voice; Piper only the language
+    var mine = d.language === lang && (!d.voice || d.voice === v.name);
+    el.textContent = mine ? (d.percent || 0) + " %" : tr("voiceWaiting");
+    return el;
+  }
+  if (v.chosen || (!VOICES.chosen[lang] && v["default"])) {
+    el = document.createElement("span");
+    el.className = "state";
+    el.textContent = tr("inUse");
+    return el;
+  }
+  el = document.createElement("button");
+  el.className = "use" + (v.installed ? "" : " get");
+  el.textContent = v.installed ? tr("useVoice") : tr("downloadVoiceMb", { mb: v.mb });
+  el.onclick = function () { chooseVoice(lang, v); };
+  return el;
+}
+
+function voiceRows(lang) {
+  var list = document.createElement("div");
+  list.className = "voices";
+  VOICES.languages[lang].forEach(function (v) {
+    var row = document.createElement("div");
+    row.className = "voice" + (v.chosen ? " on" : "");
+    var play = document.createElement("button");
+    play.className = "listen";
+    play.title = tr("listen", { name: v.name });
+    play.textContent = sampleId === v.id ? "\\u25A0" : "\\u25B6";
+    play.onclick = function () {
+      if (sampleId === v.id) { sample.pause(); sampleId = null; }
+      else { sample.src = "/voice-sample/" + v.id + ".mp3"; sample.play(); sampleId = v.id; }
+      drawVoices();
+    };
+    var who = document.createElement("div");
+    who.className = "who";
+    var name = document.createElement("b");
+    name.textContent = v.name;
+    var info = document.createElement("span");
+    info.textContent = tr(v.gender === "f" ? "woman" : "man") + " \\u00B7 " +
+      (v.installed ? tr("voiceInstalled") : v.mb + " MB");
+    who.appendChild(name);
+    who.appendChild(info);
+    row.appendChild(play);
+    row.appendChild(who);
+    row.appendChild(voiceAction(lang, v));
+    list.appendChild(row);
+  });
+  return list;
+}
+
+function drawVoices() {
+  if (!VOICES) return;
+  var all = document.getElementById("voices-all");
+  all.textContent = "";
+  Object.keys(VOICES.languages).forEach(function (lang) {
+    var h = document.createElement("h2");
+    h.textContent = languageName(lang);
+    all.appendChild(h);
+    all.appendChild(voiceRows(lang));
+  });
+}
+
+function chooseVoice(lang, v) {
+  fetch("/voices", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ language: lang, id: v.id })
+  })
+    .then(function (r) {
+      return r.json().then(function (body) {
+        if (!r.ok) throw new Error(trError(body, r.status));
+        return loadVoices();
+      });
+    })
+    .catch(function (err) { say(err.message, "bad"); });
+}
+
+
+loadVoices();
 refresh();
 </script>
 </body>

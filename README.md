@@ -248,4 +248,8 @@ say what came out and what should have.
 
 ## License
 
-[MIT](LICENSE) © dragon90o
+[GPL-3.0](LICENSE) © dragon90o
+
+ReadAloud ships Piper, espeak-ng and phonemizer, which are licensed under the GPL-3.0, so the program as a whole is distributed under the GPL-3.0 as well (it was MIT until November 2026).
+
+Voices: [Piper](https://github.com/OHF-Voice/piper1-gpl) (Thorsten, Lessac, Dave); [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) by hexgrad (Apache 2.0); the German Kokoro voices Martin and Victoria by [kikiri-tts](https://huggingface.co/kikiri-tts) (Apache 2.0). The voices are downloaded the first time they are used, not shipped with the program.

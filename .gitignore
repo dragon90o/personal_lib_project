@@ -38,3 +38,10 @@ translate.env
 # and the add-on itself: personal, never in the repo nor in the published
 # program (server.py runs the same without it)
 translate.py
+
+# the Kokoro voices (voices.py): downloaded the first time one is picked, 350 MB
+# and more; kokoro_de/ keeps our own export of Victoria, published in Spaces
+kokoro/
+kokoro_de/
+# the voice picked for each language and this computer's speeds
+voices.json

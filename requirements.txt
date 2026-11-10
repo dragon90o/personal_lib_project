@@ -20,3 +20,6 @@ pystray>=0.19
 
 # MP3 export; the encoder comes compiled inside the wheel
 lameenc>=1.7
+
+# Kokoro, the voices picked in the library besides Piper (voices.py)
+kokoro-onnx>=0.4

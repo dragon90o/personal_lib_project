@@ -25,6 +25,7 @@ import re
 import shutil
 import sys
 import threading
+import time
 import urllib.request
 import wave
 import webbrowser
@@ -48,8 +49,11 @@ except ImportError:
         @staticmethod
         def warm_up(_ensure_voice):
             pass
-from book import VOICES, DEFAULT_LANGUAGE, generate_html
+# from book import VOICES, DEFAULT_LANGUAGE, generate_html
+from book import VOICES, DEFAULT_LANGUAGE, generate_html, refresh
 from template import SHELF
+# the voices to choose from in the library (Piper and Kokoro), see voices.py
+import voices
 
 PORT = 8765
 LIBRARY = "books"
@@ -251,6 +255,64 @@ def build(pdf, name, start):
         JOBS[name] = "failed: %s" % e
 
 
+# the pages tell the server they are still open (GET /alive, every 15 s) and
+# when one closes (POST /bye). With no page left the server stops by itself,
+# so closing the browser closes ReadAloud too: a server left running in some
+# terminal kept the port, and the next start opened that old one instead
+# Each page has an id: it is "open" from its first /alive until its /bye, so
+# the server knows when the last one closed and stops a few seconds later,
+# instead of waiting a minute for pings that stopped (it looked as if it never
+# closed). "seen" is the last word from any page, "empty" since when none is open
+PAGES = {"open": set(), "seen": None, "empty": None}
+# with no page open, how long before stopping: enough to go from the library
+# to a book, where one page closes and the next opens
+BYE_GRACE = 4
+# with no word from any page for this long, they are gone (the browser was
+# killed, say, and never said bye)
+SILENCE = 180
+
+
+def busy():
+    """Something that must not be cut off: a book being prepared, an MP3
+    being made, a voice downloading."""
+    return (any(j == "building" for j in JOBS.values())
+            or any(isinstance(e, dict) for e in EXPORTS.values())
+            or bool(DOWNLOAD) or KOKORO_LOCK.locked())
+
+
+def watch_pages():
+    """Stop the program once no page has been open for a while (see PAGES)."""
+    while True:
+        time.sleep(1)
+        seen = PAGES["seen"]
+        if seen is None or busy():
+            continue
+        now = time.monotonic()
+        empty = PAGES["empty"]
+        closed = not PAGES["open"] and empty is not None and now - empty > BYE_GRACE
+        if closed or now - seen > SILENCE:
+            print("no page open any more: closing", flush=True)
+            # the whole process, the tray icon of the packaged program with it
+            os._exit(0)
+
+
+def refresh_library():
+    """Give every book on the shelf the current reader.
+
+    The reader is copied into each book's index.html when it is prepared, so
+    an update of the program (the paragraphs prepared further ahead, say) never
+    reached the books people already had. refresh() rebuilds the page around
+    the same text and only writes when something changed; a book it cannot
+    read keeps its old reader rather than stopping the start.
+    """
+    for name in library():
+        try:
+            if refresh(os.path.join(LIBRARY, name, "index.html")):
+                print("updated the reader of %s" % name)
+        except Exception as e:
+            print("could not update the reader of %s: %s" % (name, e))
+
+
 def check_new(name):
     """Refuse a book the library already has, or is already preparing."""
     if name in library():
@@ -378,10 +440,36 @@ def voice_for(language):
 
 
 def synthesize(language, text):
-    """Return the WAV for this text, ready to send to the browser."""
-    key = (language, text)
+    """Return the WAV for this text, ready to send to the browser.
+
+    With the voice chosen for the language in the library (voices.py); Piper's
+    goes on as before, Kokoro's goes through voices.pcm()."""
+    v = voices.current(language)
+    # key = (language, text)
+    # by voice, not language: after a change of voice the cache would replay the old one
+    key = (v["id"], text)
     if key in CACHE:
         return CACHE[key]
+    if v["engine"] == "kokoro":
+        with VOICE_LOCK:
+            started = time.monotonic()
+            samples, rate = voices.pcm(v, text, None)
+            # what reading takes here feeds the MP3's time estimate
+            voices.learn("kokoro", len(text), time.monotonic() - started)
+        if not samples:
+            # nothing speakable: the same breath of silence as below
+            samples = bytes(2 * rate * SILENCE_MS // 1000)
+        memory = io.BytesIO()
+        with wave.open(memory, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(rate)
+            w.writeframes(samples)
+        data = memory.getvalue()
+        if len(CACHE) > CACHE_LIMIT:
+            CACHE.clear()
+        CACHE[key] = data
+        return data
     with VOICE_LOCK:
         voice = voice_for(language)
         memory = io.BytesIO()
@@ -466,33 +554,81 @@ def pcm(voice, text):
         return r.readframes(r.getnframes())
 
 
-def export(name):
+def export_voices(name):
+    """The two ways an MP3 can be made, with how long each would take here:
+    the fast voice (the language's Piper) and the chosen one, when that is a
+    different, slower one. {"fast": {...}, "chosen": {...} or None}"""
+    language = language_of(os.path.join(LIBRARY, name, "index.html"))
+    chars = sum(len(t) for t in paragraphs(name))
+    fast, chosen = voices.default(language), voices.current(language)
+
+    def option(v):
+        return {"name": v["name"], "seconds": round(voices.seconds_for(v["engine"], chars))}
+
+    return {"fast": option(fast), "chosen": option(chosen) if chosen is not fast else None}
+
+
+# def export(name):
+def export(name, fast=False):
     """Read the whole book into books/<name>/audio.mp3, in the background.
 
     It is written to .part and renamed at the end, so a half-done mp3 is never
     offered. One paragraph at a time holds VOICE_LOCK, so reading a book while
     another exports still works, just slower.
+
+    fast: with the language's Piper voice, minutes; otherwise with the chosen
+    one, which with Kokoro can take half an hour. The progress counts the
+    text, not the paragraphs (one long paragraph froze the percentage), and
+    says how long is left.
     """
     # out = os.path.join(LIBRARY, name, name + ".mp3")
     out = os.path.join(LIBRARY, name, MP3)
     try:
         texts = paragraphs(name)
+        # with VOICE_LOCK:
+        #     voice = voice_for(language_of(os.path.join(LIBRARY, name, "index.html")))
+        # rate = voice.config.sample_rate
+        # with the voice chosen for the book's language, Piper or Kokoro
+        language = language_of(os.path.join(LIBRARY, name, "index.html"))
+        # v = voices.current(language)
+        v = voices.default(language) if fast else voices.current(language)
         with VOICE_LOCK:
-            voice = voice_for(language_of(os.path.join(LIBRARY, name, "index.html")))
-        rate = voice.config.sample_rate
+            voice = voice_for(language) if v["engine"] == "piper" else None
+        rate = voice.config.sample_rate if voice else voices.KOKORO_RATE
         encoder = lameenc.Encoder()
         encoder.set_in_sample_rate(rate)
         encoder.set_channels(1)
         encoder.set_bit_rate(64)  # it is a voice; 64 kbps is plenty
         encoder.set_quality(2)
         pause = bytes(2 * rate * PAUSE_MS // 1000)
-        print("exporting %s to mp3 (%d paragraphs) ..." % (name, len(texts)))
+        print("exporting %s to mp3 with %s (%d paragraphs) ..." % (name, v["name"], len(texts)))
+        total = sum(len(t) for t in texts) or 1
+        # done, worked = 0, 0.0
+        # the voice is loaded before the clock starts: counted in the first
+        # paragraph, its seconds made the start look far slower than it was
+        with VOICE_LOCK:
+            voices.pcm(v, "Ok.", voice)
+        done = 0
+        # characters per second, from what this computer did before, then
+        # eased toward each paragraph's: taken raw, one short or long
+        # paragraph made the time left jump (10, 5, 1, 2 min)
+        pace = voices.speed(v["engine"])
+        EXPORTS[name] = {"done": 0, "total": total, "left": round(total / pace)}
         with open(out + ".part", "wb") as f:
             for i, text in enumerate(texts):
                 with VOICE_LOCK:
-                    audio = pcm(voice, text)
+                    # audio = pcm(voice, text)
+                    started = time.monotonic()
+                    audio = voices.pcm(v, text, voice)[0]
+                    took = time.monotonic() - started
                 f.write(encoder.encode(audio + pause))
-                EXPORTS[name] = {"done": i + 1, "total": len(texts)}
+                # EXPORTS[name] = {"done": i + 1, "total": len(texts)}
+                done += len(text)
+                voices.learn(v["engine"], len(text), took)
+                # left = (total - done) * worked / done if done else 0
+                if len(text) >= 150 and took > 0:
+                    pace = pace * 0.85 + (len(text) / took) * 0.15
+                EXPORTS[name] = {"done": done, "total": total, "left": round((total - done) / pace)}
             f.write(encoder.flush())
         os.replace(out + ".part", out)
         EXPORTS.pop(name, None)
@@ -500,6 +636,48 @@ def export(name):
     except Exception as e:
         print("  exporting %s failed: %s" % (name, e))
         EXPORTS[name] = "failed: %s" % e
+
+
+# voices picked in the library whose download failed: id -> the reason, for
+# the page to show. Cleared when it is tried again
+VOICE_ERRORS = {}
+# one Kokoro download at a time. Not DOWNLOAD_LOCK: ensure_voice() takes that
+# one even just to see the Piper model is on disk, and with Kokoro's 353 MB
+# holding it the book waited for the whole download instead of reading with
+# its default voice meanwhile
+KOKORO_LOCK = threading.Lock()
+
+
+def fetch_voice(v):
+    """Download a voice picked in the library, in the background.
+
+    Piper goes through ensure_voice() as always. Kokoro's files go into
+    kokoro/, each through download() (a .part renamed at the end, the progress
+    in DOWNLOAD), so a voice counts as installed only once all of it is there.
+    Until then the language keeps reading with its default voice.
+    """
+    VOICE_ERRORS.pop(v["id"], None)
+    if v["engine"] == "piper":
+        if ensure_voice(v["language"]) is None:
+            VOICE_ERRORS[v["id"]] = "no internet connection"
+        return
+    # with DOWNLOAD_LOCK:
+    with KOKORO_LOCK:
+        try:
+            os.makedirs(voices.KOKORO_DIR, exist_ok=True)
+            for name, url in v["files"]:
+                path = voices.kokoro_path(name)
+                if os.path.isfile(path):
+                    continue
+                print("downloading %s (%s) ..." % (name, v["name"]))
+                DOWNLOAD.update(language=v["language"], voice=v["name"], percent=0)
+                download(url, path)
+            print("  %s ready" % v["name"])
+        except OSError as e:
+            print("  could not download %s: %s" % (v["name"], e))
+            VOICE_ERRORS[v["id"]] = str(e)
+        finally:
+            DOWNLOAD.clear()
 
 
 class Reader(SimpleHTTPRequestHandler):
@@ -513,6 +691,9 @@ class Reader(SimpleHTTPRequestHandler):
         POST /tts       text in, wav out
         POST /upload    a pdf chosen in the browser, as the raw request body
         POST /add       {"path": ..., "start": ...} for a pdf already on disk
+        GET  /voices    the voices of each language and which one is chosen
+        GET  /voice-sample/<id>.mp3   a voice's bundled 12 s sample
+        POST /voices    {"language": ..., "id": ...} read that language with it
     """
 
     def end_headers(self):
@@ -575,6 +756,40 @@ class Reader(SimpleHTTPRequestHandler):
                 with open(resource("assets", "readaloud.png"), "rb") as f:
                     self.reply(200, f.read(), "image/png")
             except OSError:
+                self.send_error(404)
+        elif path == "/voices":
+            # the voices of each language, which is chosen and installed, and
+            # what is downloading, for the library's Voices tab and dialog
+            self.json(200, {
+                "languages": {lang: voices.public(lang) for lang in voices.CATALOG},
+                "chosen": voices.choices(),
+                "download": DOWNLOAD,
+                "errors": VOICE_ERRORS,
+            })
+        elif path == "/alive":
+            # a page saying it is (still) open, see watch_pages()
+            PAGES["seen"] = time.monotonic()
+            page = parse_qs(urlsplit(self.path).query).get("id", [""])[0][:40]
+            if page:
+                PAGES["open"].add(page)
+                PAGES["empty"] = None
+            self.reply(204, b"", "text/plain")
+        elif path == "/export-options":
+            # the fast voice and the chosen one, with how long each MP3 would
+            # take on this computer; only books on the shelf
+            name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
+            if name not in library():
+                self.json(400, error_body(UserError("no_book", "there is no such book")))
+            else:
+                self.json(200, export_voices(name))
+        elif path.startswith("/voice-sample/"):
+            # the bundled 12 s sample of a voice; only ids from the catalog,
+            # never a path
+            v = voices.find(path[len("/voice-sample/"):].replace(".mp3", ""))
+            try:
+                with open(resource("assets", "voices", v["id"] + ".mp3"), "rb") as f:
+                    self.reply(200, f.read(), "audio/mpeg")
+            except (OSError, TypeError):
                 self.send_error(404)
         elif path.endswith(".mp3"):
             self.send_mp3()
@@ -653,6 +868,14 @@ class Reader(SimpleHTTPRequestHandler):
             self.delete_mp3()
         elif parts.path == "/feedback":
             self.feedback()
+        elif parts.path == "/voices":
+            self.choose_voice()
+        elif parts.path == "/bye":
+            # a page closing (sendBeacon on pagehide), see watch_pages()
+            PAGES["open"].discard(query.get("id", [""])[0][:40])
+            if not PAGES["open"]:
+                PAGES["empty"] = time.monotonic()
+            self.reply(204, b"", "text/plain")
         elif translate.ENABLED and parts.path == "/translate":
             translate.handle_post(self, query)
         else:
@@ -684,14 +907,19 @@ class Reader(SimpleHTTPRequestHandler):
         """Start the mp3 of a book on the shelf; the page follows it in /library."""
         length = int(self.headers.get("Content-Length", 0))
         try:
-            name = str(json.loads(self.rfile.read(length) or b"{}").get("name", ""))
+            # name = str(json.loads(self.rfile.read(length) or b"{}").get("name", ""))
+            body = self.rfile.read(length)
+            name = str(json.loads(body or b"{}").get("name", ""))
             # only names on the shelf, never a path, as in delete()
             if name not in library():
                 raise UserError("no_book", "there is no such book")
             if isinstance(EXPORTS.get(name), dict):
                 raise UserError("exporting", "“%s” is already being exported" % name, name)
             EXPORTS[name] = {"done": 0, "total": 0}
-            threading.Thread(target=export, args=(name,), daemon=True).start()
+            # threading.Thread(target=export, args=(name,), daemon=True).start()
+            # "fast": with the quick voice instead of the chosen one
+            fast = bool(json.loads(body or b"{}").get("fast"))
+            threading.Thread(target=export, args=(name, fast), daemon=True).start()
         except ValueError as e:
             self.json(400, error_body(e))
             return
@@ -732,6 +960,24 @@ class Reader(SimpleHTTPRequestHandler):
             self.json(502, {"error": str(e), "code": "feedback_offline"})
             return
         self.json(200, {"ok": True})
+
+    def choose_voice(self):
+        """{"language": "de", "id": "victoria"}: read that language with this
+        voice from now on, downloading it first if it is not here yet."""
+        length = int(self.headers.get("Content-Length", 0))
+        try:
+            sent = json.loads(self.rfile.read(length) or b"{}")
+            v = voices.find(str(sent.get("id", "")))
+            if not v or v["language"] != sent.get("language") or not voices.offered(v):
+                raise UserError("no_voice", "there is no such voice")
+            voices.choose(v["language"], v["id"])
+            print("%s now reads with %s" % (v["language"], v["name"]))
+            if not voices.installed(v):
+                threading.Thread(target=fetch_voice, args=(v,), daemon=True).start()
+        except ValueError as e:
+            self.json(400, error_body(e))
+            return
+        self.json(200, {"id": v["id"], "installed": voices.installed(v)})
 
     def delete_mp3(self):
         """Remove a book's mp3, so it can be made again. Only the mp3 and a
@@ -1031,6 +1277,8 @@ def main():
         log = open(os.path.join(data, "readaloud.log"), "w", encoding="utf-8", buffering=1)
         sys.stdout = sys.stderr = log
         print("%s - books and voices are kept in %s" % (APP_NAME, data))
+    # the books prepared with an older version get the current reader
+    refresh_library()
     pdf, start, rebuild = choose_book(sys.argv[1:])
     path = prepare(pdf, start, rebuild) if pdf else "/"
     url = "http://localhost:%d%s" % (PORT, path)
@@ -1073,6 +1321,8 @@ def main():
     if frozen():
         threading.Thread(target=offer_desktop_shortcut, daemon=True).start()
     translate.warm_up(ensure_voice)
+    # closing the last page closes the program
+    threading.Thread(target=watch_pages, daemon=True).start()
     try:
         if frozen():
             tray(server, url)

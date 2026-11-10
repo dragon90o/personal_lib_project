@@ -976,8 +976,16 @@ def refresh(out):
     body = page[page.index("<main>") + len("<main>"):page.rindex("</main>")]
     title = html.unescape(re.search(r"<title>(.*?)</title>", page, re.S).group(1))
     language = re.search(r'<html lang="([^"]*)"', page).group(1)
+    # with open(out, "w", encoding="utf-8") as f:
+    #     f.write(reading_document(body, title, language))
+    # written only when the reader actually changed: the server now runs this
+    # over the whole library on every start. Returns whether it was rewritten
+    new = reading_document(body, title, language)
+    if new == page:
+        return False
     with open(out, "w", encoding="utf-8") as f:
-        f.write(reading_document(body, title, language))
+        f.write(new)
+    return True
 
 
 def generate_html(path, out, start=0, folder="figures", title=None):

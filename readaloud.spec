@@ -26,11 +26,19 @@ a = Analysis(
     ['server.py'],
     # Piper's data (the espeak-ng pronunciation rules) and its compiled
     # espeakbridge are not found by following the imports alone
-    binaries=collect_dynamic_libs('piper'),
+    # binaries=collect_dynamic_libs('piper'),
+    # Kokoro (voices.py) phonemizes with its own espeak-ng, a dll in espeakng_loader
+    binaries=collect_dynamic_libs('piper') + collect_dynamic_libs('espeakng_loader'),
     # the icon goes along too: the tray and the browser tab use the png.
     # RapidOCR's models and config.yaml (orientation.py) are data files too
+    # datas=collect_data_files('piper') + collect_data_files('rapidocr_onnxruntime')
+    # + [('assets/readaloud.png', 'assets')],
+    # and Kokoro's: its vocabulary (config.json), espeak-ng's data, the language
+    # lists phonemizer reads, and the 12 s sample of every voice (assets/voices)
     datas=collect_data_files('piper') + collect_data_files('rapidocr_onnxruntime')
-    + [('assets/readaloud.png', 'assets')],
+    + collect_data_files('kokoro_onnx') + collect_data_files('espeakng_loader')
+    + collect_data_files('language_tags') + collect_data_files('csvw')
+    + [('assets/readaloud.png', 'assets'), ('assets/voices', 'assets/voices')],
     # pystray picks its backend at run time, so the Windows one is not found
     # by following the imports
     # hiddenimports=['piper.espeakbridge', 'pystray._win32'],

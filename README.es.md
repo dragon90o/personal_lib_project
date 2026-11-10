@@ -253,4 +253,8 @@ haber salido.
 
 ## Licencia
 
-[MIT](LICENSE) © dragon90o
+[GPL-3.0](LICENSE) © dragon90o
+
+ReadAloud incluye Piper, espeak-ng y phonemizer, que tienen licencia GPL-3.0, así que el programa completo se distribuye también bajo la GPL-3.0 (hasta noviembre de 2026 era MIT).
+
+Voces: [Piper](https://github.com/OHF-Voice/piper1-gpl) (Thorsten, Lessac, Dave); [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) de hexgrad (Apache 2.0); las voces alemanas de Kokoro Martin y Victoria de [kikiri-tts](https://huggingface.co/kikiri-tts) (Apache 2.0). Las voces se descargan la primera vez que se usan, no van dentro del programa.
